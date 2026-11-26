@@ -1,0 +1,33 @@
+# ---- Node ----
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ---- Capacitor / Android 构建产物 ----
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/local.properties
+android/.idea/
+*.iml
+
+# ---- APK（发布包走 GitHub Releases，不入库）----
+*.apk
+*.aab
+*.keystore
+*.jks
+keystore.properties
+
+# ---- 前端残留 ----
+www/index.html.bak*
+*.tmp
+*.log
+
+# ---- 编辑器/系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,2447 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b16">
+<title data-i18n="appName">电脑监测</title>
+<style>
+:root{
+  --bg0:#070b16; --bg1:#0b1220;
+  --card:rgba(255,255,255,.055); --card2:rgba(255,255,255,.028);
+  --line:rgba(255,255,255,.10); --line2:rgba(255,255,255,.06);
+  --txt:#eaf0fb; --txt2:#9aa7bd; --txt3:#5d6a84;
+  --green:#34d399; --yellow:#fbbf24; --red:#f87171;
+  --accent:#38bdf8; --accent2:#818cf8;
+  --glow:rgba(120,160,255,.16);
+  --shadow:0 12px 34px rgba(0,0,0,.45);
+}
+[data-theme="light"]{
+  --bg0:#e9eef8; --bg1:#dfe6f2;
+  --card:rgba(255,255,255,.72); --card2:rgba(255,255,255,.5);
+  --line:rgba(15,23,42,.10); --line2:rgba(15,23,42,.06);
+  --txt:#16202f; --txt2:#4a5568; --txt3:#8590a4;
+  --green:#0da371; --yellow:#d97706; --red:#dc2626;
+  --accent:#0284c7; --accent2:#6366f1;
+  --glow:rgba(99,140,255,.18);
+  --shadow:0 12px 30px rgba(30,50,90,.16);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  background:var(--bg0); color:var(--txt);
+  overflow:hidden; position:relative;
+  -webkit-font-smoothing:antialiased;
+}
+/* 背景光斑 */
+.bg{position:fixed;inset:0;overflow:hidden;z-index:0;pointer-events:none}
+.bg .blob{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5}
+.bg .b1{width:420px;height:420px;background:#5b4ce0;top:-140px;left:-110px}
+.bg .b2{width:360px;height:360px;background:#0ea5e9;top:30%;right:-150px;opacity:.4}
+.bg .b3{width:340px;height:340px;background:#8b2f9b;bottom:-130px;left:10%;opacity:.4}
+[data-theme="light"] .bg .blob{opacity:.25}
+
+/* 顶部栏 */
+.topbar{
+  position:relative;z-index:5;display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px 10px;padding-top:calc(14px + env(safe-area-inset-top));
+}
+.brand{display:flex;align-items:center;gap:8px}
+.brand .logo{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff}
+.brand h1{font-size:17px;font-weight:700;letter-spacing:.3px}
+.brand .sub{font-size:11px;color:var(--txt3);margin-top:1px}
+.conn{display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:12px;color:var(--txt2);max-width:60%}
+.conn-top{display:flex;align-items:center;gap:6px}
+.conn .dot{width:9px;height:9px;border-radius:50%;background:var(--txt3);transition:background .3s}
+.conn .dot.on{background:var(--green);box-shadow:0 0 8px var(--green)}
+.conn .dot.off{background:var(--red);box-shadow:0 0 8px var(--red)}
+.conn .dot.wait{background:var(--txt3);animation:pulse 1.2s infinite}
+.conn-err{font-size:10px;color:var(--red);text-align:right;line-height:1.3;word-break:break-all;display:none}
+/* UI 构建版本标记（顶部常驻，用于确认手机装的是最新 APK） */
+.ui-build{font-size:9px;color:var(--txt3);border:1px solid var(--line2);border-radius:6px;padding:1px 5px;letter-spacing:.2px;margin-left:6px;white-space:nowrap}
+@keyframes pulse{50%{opacity:.35}}
+
+/* 主视图 */
+#view{position:relative;z-index:2;height:calc(100% - 118px);overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:0 14px calc(76px + env(safe-area-inset-bottom));scrollbar-width:none}
+#view::-webkit-scrollbar{display:none}
+.page{display:none;animation:fadein .25s ease}
+.page.active{display:block}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* 玻璃卡片 */
+.card{
+  position:relative;border-radius:18px;padding:15px;margin-bottom:12px;
+  background:linear-gradient(155deg,var(--card),var(--card2));
+  border:1px solid var(--line);
+  backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);
+  box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.08);
+  overflow:hidden;
+}
+[data-theme="light"] .card{box-shadow:var(--shadow),inset 0 1px 0 rgba(255,255,255,.9)}
+.card::before{content:'';position:absolute;inset:0 0 auto 0;height:70px;
+  background:radial-gradient(120% 100% at 50% 0%,var(--glow),transparent 72%);pointer-events:none}
+.card-hd{position:relative;display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.card-hd .ic{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+.card-hd .tt{font-size:14px;font-weight:700;letter-spacing:.3px}
+.card-hd .tag{margin-left:auto;font-size:10.5px;color:var(--txt3)}
+
+/* 概览吸顶摘要条 */
+.overview{
+  position:sticky;top:0;z-index:6;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;
+  margin-bottom:12px;padding:8px 0;
+  background:transparent;
+}
+.ov{
+  position:relative;border-radius:16px;padding:9px 5px 10px;cursor:pointer;overflow:hidden;text-align:center;
+  background:linear-gradient(155deg,#2c2352 0%,#232a52 55%,#1b2a48 100%);
+  border:1px solid rgba(148,178,255,.20);
+  box-shadow:0 10px 26px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.10);
+  transition:transform .12s ease;
+}
+.ov::before{content:'';position:absolute;inset:0 0 auto 0;height:70px;
+  background:radial-gradient(120% 100% at 50% 0%,rgba(140,170,255,.28),transparent 70%);pointer-events:none}
+.ov .top,.ov .big,.ov .bar{position:relative}
+.ov:active{transform:scale(.96)}
+.ov .top{display:flex;align-items:center;justify-content:center;gap:4px;margin-bottom:5px}
+.ov .ic{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.ov .nm{font-size:10.5px;color:#c7d2e8;font-weight:700}
+.ov .big{font-size:21px;font-weight:800;line-height:1;letter-spacing:-.5px;font-variant-numeric:tabular-nums;color:#eaf0fb}
+.ov .big small{font-size:10px;font-weight:600;margin-left:1px;color:#9aa7bd}
+.ov .bar{height:7px;border-radius:4px;background:rgba(0,0,0,.30);margin-top:7px;overflow:hidden}
+.ov .bar i{display:block;height:100%;border-radius:4px;transition:width .5s ease;min-width:3px;background:var(--green)}
+.ov .hint{display:none}
+
+/* 详情行 */
+.rows{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.kv{min-width:0}
+.kv .k{font-size:11px;color:var(--txt3);letter-spacing:.3px;margin-bottom:3px}
+.kv .v{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+.kv .v small{font-size:11px;font-weight:500;color:var(--txt3);margin-left:2px}
+.kv .v.na{color:var(--txt3);font-weight:500}
+
+/* 存储页分区横排（C/D/E 三列并排） */
+.parts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:9px}
+.pcell{min-width:0;border-radius:12px;padding:9px 8px 8px;background:var(--card2);border:1px solid var(--line2);overflow:hidden}
+.pcell .pd{font-size:16px;font-weight:800;color:var(--txt);line-height:1;margin-bottom:7px}
+.pcell .pbar{height:6px;border-radius:3px;background:var(--line2);overflow:hidden;margin-bottom:7px}
+.pcell .pbar i{display:block;height:100%;border-radius:3px;transition:width .5s ease}
+.pcell .pt{font-size:10.5px;color:var(--txt3);line-height:1.3;margin-bottom:2px;white-space:nowrap}
+.pcell .pv{font-size:10.5px;color:var(--txt2);line-height:1.35;font-variant-numeric:tabular-nums;word-break:break-all}
+
+/* 每核心 */
+.cores{display:grid;grid-template-columns:repeat(8,1fr);gap:5px;margin-top:12px}
+.core{height:28px;border-radius:5px;background:var(--line2);position:relative;overflow:hidden}
+.core i{position:absolute;left:0;right:0;bottom:0;border-radius:5px;transition:height .5s ease}
+.core span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:8px;color:var(--txt);z-index:1;opacity:.85}
+
+/* 性能页紧凑指标网格（2列xN行，铺满不留空） */
+.mgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 12px}
+.mcell{min-width:0;text-align:center;padding:6px 2px}
+.mcell .mk{font-size:11.5px;color:var(--txt3);margin-bottom:7px;white-space:nowrap;line-height:1.2}
+.mcell .mv{font-size:15px;font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;white-space:nowrap;display:flex;align-items:baseline;justify-content:center;gap:4px;min-width:0}
+.mcell .mv small{font-size:10.5px;font-weight:600;color:var(--txt3);flex:none;white-space:nowrap}
+.mcell .msub{font-size:10px;color:var(--txt3);margin-top:4px;line-height:1;white-space:nowrap}
+.mgrid-sub{margin-top:10px;gap:8px 6px}
+.mgrid-sub .mcell .mk{font-size:10px;margin-bottom:3px}
+.mgrid-sub .mcell .mv{font-size:12px;font-weight:700}
+.mgrid-row2{margin-top:12px}
+.mgrid.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.mgrid.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.mgrid.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+/* GPU 卡 2×3 网格专属：固定间距强制拉开，六格独立不粘连 */
+.gpu-grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto;column-gap:24px;row-gap:20px}
+.gpu-grid .mcell{display:flex;flex-direction:column;align-items:center;padding:8px 12px}
+.gpu-grid .mcell .mv{font-size:13px;gap:0}
+.gpu-grid .mcell .mv small{font-size:10px}
+.gpu-extra{margin-top:10px;font-size:11px;color:var(--txt3);text-align:right;font-variant-numeric:tabular-nums}
+/* CPU 卡 3×2 网格（与 GPU 卡对齐）：三列固定间距、六格统一字号/字重/间距，带灰色副标签 */
+.cpu-grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:auto auto;column-gap:24px;row-gap:20px}
+.cpu-grid .mcell{display:flex;flex-direction:column;align-items:center;padding:8px 12px}
+.cpu-grid .mcell .mv{font-size:13px;gap:0}
+.cpu-grid .mcell .mv small{font-size:10px}
+
+/* 性能页卡片（一屏显示，统一内边距/字号） */
+#page-perf .card{padding:13px 14px;margin-bottom:12px}
+#page-perf .card-hd{margin-bottom:11px}
+#page-perf .cores{grid-template-columns:repeat(16,1fr);gap:3px;margin-top:12px}
+#page-perf .core{height:22px;border-radius:4px}
+
+/* 性能页一屏均匀铺满：overview 固定高度，CPU/GPU 卡纵向均分剩余空间，不滚动 */
+#page-perf.active{
+  display:flex;flex-direction:column;min-height:100%;height:100%;
+}
+#page-perf.active .overview{flex:none}
+#page-perf.active .card{flex:1 1 0;display:flex;flex-direction:column;justify-content:center}
+#page-perf.active .card-hd{flex:none}
+/* CPU 卡：标题+2×2四格+核心网格 整体垂直居中，数字紧跟标题、不留大空白 */
+#page-perf.active #cpu-rows{flex:none}
+#page-perf.active #cpu-cores{flex:none}
+/* GPU 卡：六格数字垂直居中 */
+#page-perf.active #gpu-rows{flex:none}
+
+/* 温度分项小格（2x2） */
+.tgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tcell{
+  border-radius:14px;padding:14px 10px 13px;text-align:center;min-width:0;
+  background:linear-gradient(155deg,var(--card),var(--card2));
+  border:1px solid var(--line);
+}
+.tcell .tk{font-size:12px;color:var(--txt3);font-weight:600;margin-bottom:8px;white-space:nowrap}
+.tcell .tv{font-size:26px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tcell .tv small{font-size:13px;font-weight:600;margin-left:1px;color:var(--txt3)}
+
+/* 曲线 */
+.spark{width:100%;height:64px;display:block;margin-top:10px}
+.spark polyline{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.spark .area{opacity:.12}
+
+/* ===== 状态页：四卡 2×2 紧凑网格（390×844 竖屏一屏可见） ===== */
+#page-status .stgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:stretch}
+#page-status .stgrid .card{
+  margin-bottom:0;padding:10px;border-radius:14px;min-height:168px;
+  display:flex;flex-direction:column;
+}
+#page-status .stgrid .card-hd{gap:6px;margin-bottom:6px}
+#page-status .stgrid .card-hd .ic{width:22px;height:22px;border-radius:7px;font-size:12px}
+#page-status .stgrid .card-hd .tt{font-size:12.5px}
+/* 四卡统一主数值：22px / 800 / 等宽数字；单位统一小字 */
+.st-num{font-size:22px;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+.st-num small{font-size:10px;font-weight:600;color:var(--txt3);margin-left:1px}
+.st-num.na{color:var(--txt3);font-weight:700;letter-spacing:0}
+/* v2.5.7 帧率卡：状态行 + 手动指定进程名输入条 + 可见反馈（不破坏一屏四卡） */
+.fps-dbg{font-size:9px;color:var(--txt3);text-align:center;line-height:1.2;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.fps-manual-bar{display:flex;gap:4px;margin-top:4px}
+.fps-manual-bar input{flex:1;min-width:0;font-size:10px;padding:3px 5px;border:1px solid var(--line2);border-radius:6px;background:var(--card2);color:var(--txt)}
+.fps-manual-bar button{flex:0 0 auto;font-size:10px;padding:3px 6px;border:0;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer}
+.fps-tip{font-size:9px;color:var(--accent);text-align:center;line-height:1.2;margin-top:3px;min-height:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* v2.5.8 进程点选面板（复用现有 overlay 样式，不影响进程页） */
+.fps-pick-search{width:100%;font-size:12px;padding:8px 10px;border:1px solid var(--line2);border-radius:10px;background:var(--card2);color:var(--txt);margin-bottom:8px}
+.fps-pick-hint{font-size:10px;color:var(--txt3);margin:-4px 0 8px 2px}
+.fps-pick-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--line2);cursor:pointer}
+.fps-pick-item:active{background:var(--card)}
+.fps-pick-item .fp-n{flex:1;min-width:0;font-size:12px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fps-pick-item .fp-n small{display:block;font-size:10px;color:var(--txt3);margin-top:2px}
+.fps-pick-item .fp-n .fp-title{font-size:10px;color:var(--accent,#e11d48);margin-left:6px;font-weight:400}
+.fps-pick-item .fp-go{color:var(--txt3);font-size:16px}
+.fps-pick-empty{padding:24px 10px;text-align:center;font-size:12px;color:var(--txt3)}
+/* 电池卡三小格：标签/数值都不换行，避免与相邻格重叠 */
+#batt-rows .st-mini .cell .st-k{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#batt-rows .st-mini .cell .v{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+/* 四卡统一标签小字：10px 灰 */
+.st-k{font-size:10px;color:var(--txt3);line-height:1.2;white-space:nowrap}
+.st-hero{display:flex;align-items:baseline;justify-content:center;gap:1px;padding:2px 0 3px}
+.st-foot{text-align:center;font-size:10px;color:var(--txt3);line-height:1.25;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
+/* 六宫格 / 三宫格：缩小间距 */
+.st-mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.st-mini.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.st-mini .cell{border-radius:8px;padding:5px 3px;text-align:center;min-width:0;background:var(--card2);border:1px solid var(--line2)}
+.st-mini .cell .v{font-size:12px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums;display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:0 2px;min-width:0}
+.st-mini .cell .v small{font-size:9px;font-weight:600;color:var(--txt3);white-space:nowrap}
+/* 网络卡：4 个核心数字 2×2 + 一行小字 */
+.st-net{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;flex:1;align-content:center}
+.st-net .cell{text-align:center;min-width:0}
+.st-net-foot{margin-top:5px;padding-top:4px;border-top:1px solid var(--line2);font-size:9px;color:var(--txt3);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 卡片内容区垂直居中、撑满等高 */
+#thermal-rows,#fps-rows{flex:1;display:flex;flex-direction:column;justify-content:center}
+#batt-rows{flex:1;display:flex;flex-direction:column}
+
+/* 设置 */
+.set{position:relative;display:block;width:100%;border:none;background:none;text-align:left;font:inherit}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:12px;color:var(--txt2);margin-bottom:7px;font-weight:600}
+.field input{
+  width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);
+  background:var(--card2);color:var(--txt);font-size:15px;outline:none;font-variant-numeric:tabular-nums;
+}
+.field input:focus{border-color:var(--accent)}
+.row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--line2)}
+.row:last-child{border-bottom:none}
+.row .lb{font-size:14px;font-weight:600}
+.row .lb small{display:block;font-size:11px;color:var(--txt3);font-weight:400;margin-top:2px}
+.switch{position:relative;width:46px;height:26px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.switch .sl{position:absolute;inset:0;border-radius:13px;background:var(--line2);transition:.25s;border:1px solid var(--line)}
+.switch .sl::before{content:'';position:absolute;left:3px;top:2px;width:20px;height:20px;border-radius:50%;
+  background:#fff;transition:.25s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.switch input:checked + .sl{background:var(--accent);border-color:var(--accent)}
+.switch input:checked + .sl::before{transform:translateX(20px)}
+.seg{display:flex;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg button{flex:1;padding:9px 2px;border:none;background:none;color:var(--txt2);font-size:12px;border-radius:9px;cursor:pointer;white-space:nowrap}
+.seg button.on{background:var(--accent);color:#fff;font-weight:600}
+.savetip{font-size:11px;color:var(--green);margin-top:8px;opacity:0;transition:opacity .3s}
+.savetip.show{opacity:1}
+.ip-hint{font-size:11px;color:var(--txt3);line-height:1.6;margin-top:6px}
+
+/* 覆盖层 */
+.overlay{position:fixed;inset:0;z-index:20;background:var(--bg0);transform:translateX(100%);
+  transition:transform .28s cubic-bezier(.3,.7,.3,1);display:flex;flex-direction:column;overflow:hidden}
+.overlay.show{transform:translateX(0)}
+.ov-head{display:flex;align-items:center;gap:10px;padding:14px 16px;padding-top:calc(14px + env(safe-area-inset-top));
+  border-bottom:1px solid var(--line2);flex:none}
+.ov-head .back{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--card);
+  color:var(--txt);font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.ov-head .tt{font-size:16px;font-weight:700}
+.ov-body{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+
+/* 详情页大数字 */
+.hero{text-align:center;padding:6px 0 2px}
+.hero .big{font-size:56px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-1px}
+.hero .big small{font-size:20px;font-weight:600;color:var(--txt2)}
+.hero .nm{font-size:12px;color:var(--txt3);margin-top:6px}
+
+/* 进程 */
+.proc-sum{display:flex;gap:0;margin-bottom:14px}
+.proc-sum .ps{flex:1;text-align:center;padding:12px 4px;border-radius:14px;background:var(--card);border:1px solid var(--line)}
+.proc-sum .ps + .ps{margin-left:10px}
+.proc-sum .ps .n{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.proc-sum .ps .l{font-size:10.5px;color:var(--txt3);margin-top:3px}
+.pgroup{margin-bottom:12px;border-radius:16px;overflow:hidden;border:1px solid var(--line);
+  background:linear-gradient(155deg,var(--card),var(--card2));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.pgroup-hd{display:flex;align-items:center;gap:9px;padding:13px 14px;cursor:pointer;position:relative}
+.pgroup-hd .gd{width:9px;height:9px;border-radius:50%;flex:none}
+.pgroup-hd .gt{font-size:14px;font-weight:700}
+.pgroup-hd .gc{margin-left:4px;font-size:12px;color:var(--txt3);font-variant-numeric:tabular-nums}
+.pgroup-hd .car{position:absolute;right:14px;top:50%;transform:translateY(-50%);color:var(--txt3);transition:.25s}
+.pgroup.open .car{transform:translateY(-50%) rotate(90deg)}
+.pgroup-bd{display:none;border-top:1px solid var(--line2)}
+.pgroup.open .pgroup-bd{display:block}
+.prow{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid var(--line2);cursor:pointer}
+.prow:last-child{border-bottom:none}
+.prow .pi{width:26px;height:26px;border-radius:7px;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;color:#fff;background:var(--txt3)}
+.prow .pn{flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prow .pn small{display:block;font-size:10px;color:var(--txt3)}
+.prow .pv{font-size:12px;color:var(--txt2);font-variant-numeric:tabular-nums;flex:none;width:52px;text-align:right}
+.prow.hung .pi{background:var(--red)}
+.prow.hung .pn{color:var(--red);font-weight:600}
+.prow.hung .pv{color:var(--red)}
+.more{display:block;width:100%;padding:11px;text-align:center;font-size:12px;color:var(--accent);cursor:pointer;background:none;border:none}
+
+/* 进程详情 sheet */
+.mask{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:.25s}
+.mask.show{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:31;background:var(--bg1);border-radius:22px 22px 0 0;
+  padding:10px 18px calc(18px + env(safe-area-inset-bottom));transform:translateY(100%);transition:.28s cubic-bezier(.3,.7,.3,1);
+  border-top:1px solid var(--line);box-shadow:0 -10px 40px rgba(0,0,0,.4)}
+.sheet.show{transform:translateY(0)}
+.sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--line2);margin:4px auto 12px}
+.sheet .s-title{font-size:16px;font-weight:700;margin-bottom:4px}
+.sheet .s-sub{font-size:11px;color:var(--txt3);margin-bottom:14px}
+
+/* 底部导航 */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;
+  padding:6px 10px calc(6px + env(safe-area-inset-bottom));
+  background:rgba(10,14,26,.72);backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);
+  border-top:1px solid var(--line)}
+[data-theme="light"] .tabbar{background:rgba(255,255,255,.75)}
+.tabbar button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 0;
+  background:none;border:none;color:var(--txt3);font-size:10.5px;cursor:pointer;transition:color .2s}
+.tabbar button .ti{font-size:20px;line-height:1;transition:transform .2s}
+.tabbar button.on{color:var(--accent)}
+.tabbar button.on .ti{transform:translateY(-1px) scale(1.08)}
+
+/* 空状态 */
+.empty{text-align:center;padding:40px 16px;color:var(--txt3)}
+.empty .ei{font-size:40px;margin-bottom:10px}
+.empty p{font-size:13px;line-height:1.7}
+
+/* 告警条 */
+.alerts{position:relative;z-index:2;margin:0 14px 10px}
+.alert{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:12px;margin-bottom:6px;
+  background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);font-size:12px;color:var(--red)}
+/* 超限卡片高亮 */
+.card.warn{border-color:rgba(248,113,113,.55);box-shadow:0 0 0 1px rgba(248,113,113,.25),0 12px 34px rgba(248,113,113,.18)}
+[data-theme="light"] .card.warn{border-color:rgba(220,38,38,.5)}
+
+/* ==========================================================
+   v3.0.6 驾驶舱：横屏两屏布局限定本覆盖层（左仪表盘/右12方块键）
+   作用域限定 #page-cockpit，不污染其他 tab；返回键右下角
+   ========================================================== */
+
+  /* ===== 主题变量（自成一套，不影响其他页） ===== */
+  #page-cockpit{
+    --pb-bg:#0a0c10; --pb-card:#14171f; --pb-card2:#171b24;
+    --pb-line:#232836; --pb-txt:#e7ebf2; --pb-sub:#8b93a4;
+    --pb-cpu:#37d39b; --pb-gpu:#4aa8ff; --pb-ram:#9d7bff;
+    --pb-net:#ffb454; --pb-red:#ff5a6a; --pb-accent:#37d39b;
+  }
+  #page-cockpit *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  /* v3.0.6 核心修复：默认隐藏的全屏覆盖层，绝不进入主界面文档流。
+     主界面 4 页保持原竖屏布局；只有 .show 时驾驶舱才出现。 */
+  #page-cockpit{
+    position:fixed;inset:0;z-index:100;display:none;
+    width:100vw;height:100vh;height:100dvh;
+    background:radial-gradient(120% 120% at 20% 0%,#12151d 0%,var(--pb-bg) 60%);
+    color:var(--pb-txt);
+    font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    overflow:hidden;
+  }
+  #page-cockpit.show{display:block}
+  /* 驾驶舱打开时隐藏主界面，退出即恢复 */
+  body.pb-open #view,body.pb-open .topbar,body.pb-open .tabbar,body.pb-open .alerts{display:none!important}
+
+  /* v3.0.6 Web 预览端横屏兜底：无 ScreenOrientation 能力时，用 CSS 把驾驶舱整体旋转 90° 铺满。
+     原生 APK 由 Capacitor 插件真正旋转屏幕，不加此类，二者互不干扰。 */
+  #page-cockpit.pb-web-landscape{
+    top:50%;left:50%;
+    width:100vh;height:100vw;
+    transform:translate(-50%,-50%) rotate(90deg);
+    transform-origin:center center;
+  }
+  /* 兜底旋转后已呈横屏，隐藏"请横屏"提示避免遮挡 */
+  #page-cockpit.pb-web-landscape #rot{display:none!important}
+  /* 横屏优先：主舞台两页横向切换 */
+  #page-cockpit #stage{height:100vh;height:100dvh;display:flex;transition:transform .38s cubic-bezier(.4,0,.2,1);width:200%}
+  #page-cockpit #stage.show-deck{transform:translateX(-50%)}
+  /* v3.0.6 安全区适配：顶部内容整体下移避开系统状态栏（时间/信号/电量） */
+  #page-cockpit .page{
+    width:50vw;height:100%;
+    padding:calc(2.2vh + env(safe-area-inset-top,0px)) calc(2vw + env(safe-area-inset-right,0px))
+            calc(2.2vh + env(safe-area-inset-bottom,0px)) calc(2vw + env(safe-area-inset-left,0px));
+    display:flex;flex-direction:column;gap:1.6vh;
+  }
+
+  /* ===== 仪表盘页 ===== */
+  #page-cockpit .top{display:flex;gap:1.6vw;flex:0 0 auto;height:34vh}
+  #page-cockpit .clock-card{flex:1.15;display:flex;flex-direction:column;justify-content:center;padding:0 .4vw}
+  #page-cockpit .clock{font-size:8.4vh;font-weight:600;letter-spacing:.02em;line-height:1}
+  #page-cockpit .clock small{font-size:3.2vh;color:var(--pb-sub);font-weight:500;margin-left:.4vw}
+  #page-cockpit .date{font-size:2.4vh;color:var(--pb-sub);margin-top:1.4vh}
+  #page-cockpit .weather{display:flex;align-items:center;gap:.6vw;margin-top:1.2vh;font-size:2.1vh;color:#bfe9d6}
+  #page-cockpit .weather .ico{font-size:2.8vh}
+  #page-cockpit .weather .sub{color:var(--pb-sub);font-size:1.7vh;margin-left:.4vw}
+
+  #page-cockpit .np-card{flex:1;background:var(--pb-card);border-radius:2vh;padding:2vh 2vw;
+    display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+  #page-cockpit .np-card::before{content:"";position:absolute;inset:0;background:linear-gradient(120deg,#6a5cff33,#ff6a9c22);pointer-events:none}
+  #page-cockpit .np-head{display:flex;align-items:center;gap:1.2vw;min-height:8.4vh}
+  #page-cockpit .np-cover{width:8vh;height:8vh;border-radius:1vh;object-fit:cover;flex:0 0 auto;
+    background:#20242f;display:none;box-shadow:0 .4vh 1.6vh rgba(0,0,0,.4)}
+  #page-cockpit .np-cover.on{display:block}
+  #page-cockpit .np-meta{min-width:0;flex:1}
+  #page-cockpit .np-tag{font-size:1.6vh;letter-spacing:.18em;color:#ff8fb0;font-weight:700}
+  #page-cockpit .np-title{font-size:3.4vh;font-weight:700;margin-top:.4vh;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  #page-cockpit .np-artist{font-size:1.9vh;color:var(--pb-sub);margin-top:.3vh;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  #page-cockpit .np-card.none .np-title{color:var(--pb-sub);font-size:2.6vh}
+  #page-cockpit .np-card.none::before{opacity:.35}
+  #page-cockpit .np-bar{height:.7vh;background:#2a2f3d;border-radius:1vh;overflow:hidden;margin:1.4vh 0 .6vh}
+  #page-cockpit .np-bar>i{display:block;height:100%;width:42%;background:linear-gradient(90deg,#ff8fb0,#ffd36a)}
+  /* v3.1.2：播放器不报时间轴时的流动进度条，避免卡在 0:00 误导 */
+  #page-cockpit .np-bar.indet>i{width:34%;background:linear-gradient(90deg,#ff8fb0,#ffd36a,#ff8fb0);
+    background-size:200% 100%;animation:npflow 2s linear infinite}
+  @keyframes npflow{0%{margin-left:-34%}100%{margin-left:100%}}
+  #page-cockpit .np-time{display:flex;justify-content:space-between;font-size:1.5vh;color:var(--pb-sub)}
+  #page-cockpit .np-ctrl{display:flex;align-items:center;justify-content:center;gap:2vw;margin-top:1vh}
+  #page-cockpit .np-ctrl button{background:none;border:none;color:var(--pb-txt);font-size:2.8vh;cursor:pointer}
+  #page-cockpit .np-ctrl .play{width:5.2vh;height:5.2vh;border-radius:50%;background:#fff;color:#111;
+    display:flex;align-items:center;justify-content:center;font-size:2.4vh}
+
+  /* v3.1.5：四指标改为 2×2 网格，每卡宽度翻倍，数值不换行、子信息不挤压 */
+  #page-cockpit .metrics{display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:1.4vh 1.6vw;flex:1 1 auto;min-height:0}
+  #page-cockpit .m{background:var(--pb-card);border-radius:1.6vh;padding:1.4vh 1.4vw;display:flex;flex-direction:column;position:relative;overflow:hidden}
+  #page-cockpit .m .lab{font-size:1.7vh;font-weight:700;letter-spacing:.06em}
+  #page-cockpit .m .val{font-size:3.8vh;font-weight:700;margin-top:.3vh;line-height:1;white-space:nowrap}
+  #page-cockpit .m .val span{font-size:2vh;font-weight:500;color:var(--pb-sub);margin-left:.3vw}
+  #page-cockpit .m .ext{font-size:1.5vh;color:var(--pb-sub);margin-top:.3vh}
+  /* 子信息 2×2 排布，避免竖排挤压 */
+  #page-cockpit .m .rows{margin-top:.9vh;display:grid;grid-template-columns:1fr 1fr;gap:.7vh 1vw;position:relative;z-index:2}
+  #page-cockpit .m .r{display:flex;justify-content:space-between;align-items:baseline;font-size:1.6vh;line-height:1;gap:.3vw}
+  #page-cockpit .m .r b{font-weight:700;color:var(--pb-txt);white-space:nowrap}
+  #page-cockpit .m .r span{color:var(--pb-sub);font-size:1.4vh;white-space:nowrap}
+  #page-cockpit .m .r b.hot{color:var(--pb-red)}
+  /* 底部图形区：压缩高度，给上方信息让出空间 */
+  #page-cockpit .m .foot{margin-top:auto;padding-top:.9vh;display:flex;flex-direction:column;gap:.5vh;position:relative;z-index:2}
+  #page-cockpit .m .foot .ft-lab{display:flex;justify-content:space-between;font-size:1.2vh;color:var(--pb-sub)}
+  #page-cockpit .m .spark{position:relative;height:3.6vh;opacity:.9;width:100%}
+  #page-cockpit .m .prog{height:.9vh;background:#262b38;border-radius:1vh;overflow:hidden}
+  #page-cockpit .m .prog>i{display:block;height:100%;transition:width .5s}
+  /* CPU 每核占用竖条 */
+  #page-cockpit .cores{display:flex;align-items:flex-end;gap:.25vw;height:3.2vh}
+  #page-cockpit .cores .cbar{flex:1;background:#262b38;border-radius:.3vh .3vh 0 0;position:relative;overflow:hidden}
+  #page-cockpit .cores .cbar>i{position:absolute;left:0;right:0;bottom:0;background:var(--pb-cpu);border-radius:.3vh .3vh 0 0;transition:height .5s}
+  #page-cockpit .cpu .lab{color:var(--pb-cpu)} .cpu .prog>i{background:var(--pb-cpu)}
+  #page-cockpit .gpu .lab{color:var(--pb-gpu)} .gpu .prog>i{background:var(--pb-gpu)}
+  #page-cockpit .ram .lab{color:var(--pb-ram)} .ram .prog>i{background:var(--pb-ram)}
+  #page-cockpit .net .lab{color:var(--pb-net)} .net .prog>i{background:var(--pb-net)}
+
+  /* ===== 方块键控制台页 ===== */
+  #page-cockpit .deck-wrap{display:flex;flex-direction:column;gap:1.4vh;flex:1 1 auto;min-height:0}
+  #page-cockpit .statbar{display:grid;grid-template-columns:repeat(4,1fr);gap:1.6vw;flex:0 0 auto}
+  #page-cockpit .stat{background:var(--pb-card);border:1px solid var(--pb-line);border-radius:1.4vh;
+    padding:1.1vh 1.2vw;display:flex;flex-direction:column;gap:.35vh}
+  #page-cockpit .stat .sl{font-size:1.35vh;color:var(--pb-sub);letter-spacing:.06em}
+  #page-cockpit .stat .sv{font-size:2.5vh;font-weight:700;line-height:1}
+  #page-cockpit .stat .sv small{font-size:1.35vh;font-weight:500;color:var(--pb-sub);margin-left:.2vw}
+  #page-cockpit .stat .sbar{height:.5vh;background:#262b38;border-radius:1vh;overflow:hidden;margin-top:.3vh}
+  #page-cockpit .stat .sbar>i{display:block;height:100%}
+  #page-cockpit .deck{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(3,1fr);gap:1.6vw;flex:1 1 auto;min-height:0}
+  #page-cockpit .key{background:linear-gradient(160deg,var(--pb-card2),var(--pb-card));border:1px solid var(--pb-line);
+    border-radius:1.8vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.7vh;
+    cursor:pointer;transition:transform .12s,border-color .2s,box-shadow .2s;position:relative}
+  #page-cockpit .key:active,#page-cockpit .key.press{transform:scale(.96);border-color:var(--pb-accent);box-shadow:0 0 2vh #37d39b55;background:linear-gradient(160deg,#37d39b33,var(--pb-card))}
+  /* v3.0.6 失败兜底：短暂闪红，不弹窗不崩溃 */
+  #page-cockpit .key.fail{border-color:var(--pb-red)!important;box-shadow:0 0 2.4vh #ff5a6a88!important;animation:pbShake .35s}
+  @keyframes pbShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-.4vh)}75%{transform:translateX(.4vh)}}
+  #page-cockpit .key .kico{font-size:3.4vh}
+  #page-cockpit .key .ktxt{font-size:1.7vh;color:var(--pb-sub)}
+  #page-cockpit .key .ksub{font-size:1.25vh;color:var(--pb-accent);opacity:.85;margin-top:-.15vh}
+  #page-cockpit .key .kdot{position:absolute;top:1.3vh;right:1.3vh;width:.85vh;height:.85vh;border-radius:50%;background:#3a4152}
+  #page-cockpit .key .kdot.on{background:var(--pb-accent);box-shadow:0 0 .8vh var(--pb-accent)}
+  #page-cockpit .key.danger:active{border-color:var(--pb-red);box-shadow:0 0 2vh #ff5a6a55}
+  #page-cockpit .key.danger .ksub{color:var(--pb-red)}
+
+  /* ===== 底部页码点（限定在驾驶舱容器内） ===== */
+  #page-cockpit .dots{position:absolute;bottom:2.2vh;left:0;right:0;display:flex;justify-content:center;gap:.8vw;z-index:9}
+  #page-cockpit .dots i{width:1vh;height:1vh;border-radius:50%;background:#3a4152;cursor:pointer;transition:.2s}
+  #page-cockpit .dots i.on{background:var(--pb-accent);width:2.4vh;border-radius:1vh}
+
+  /* 竖屏提示：仅驾驶舱页内显示，绝不出现在主界面 */
+  #page-cockpit #rot{display:none;position:absolute;inset:0;background:var(--pb-bg);z-index:50;
+    align-items:center;justify-content:center;flex-direction:column;gap:2vh;color:var(--pb-sub);text-align:center;padding:8vw}
+  #page-cockpit #rot .ph{font-size:8vh}
+  @media (orientation:portrait){
+    #page-cockpit.show #rot{display:flex}
+  }
+
+  /* v3.1.0 返回键：底部中央、页码点右侧空白区的小胶囊；absolute 限定容器内，
+     绝不浮出覆盖层、绝不放右侧（右侧躲不开系统电量/信号图标） */
+  #page-cockpit .pb-back{
+    position:absolute;z-index:20;
+    left:calc(50% + 5.2vh + env(safe-area-inset-left,0px));
+    bottom:calc(1.4vh + env(safe-area-inset-bottom,0px));
+    width:52px;height:28px;padding:0;line-height:26px;
+    border:1px solid rgba(140,150,170,.45);
+    background:rgba(20,23,31,.55);color:var(--pb-txt);
+    border-radius:14px;font-size:11px;font-weight:600;text-align:center;cursor:pointer;
+    touch-action:manipulation;backdrop-filter:blur(4px);
+    box-shadow:0 2px 10px rgba(0,0,0,.4)}
+  #page-cockpit .pb-back:active{transform:scale(.94);border-color:var(--pb-accent);background:rgba(55,211,155,.3)}
+
+</style>
+</head>
+<body>
+<div class="bg"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">⚡</div>
+    <div><h1 data-i18n="appName">电脑监测</h1><div class="sub" id="hostline" data-i18n="notConnected">未连接</div></div>
+  </div>
+  <div class="conn">
+    <div class="conn-top"><span class="dot wait" id="dot"></span><span id="connlabel" data-i18n="connecting">连接中</span><span class="ui-build">UI build 3.1.7</span></div>
+    <div class="conn-err" id="connerr"></div>
+  </div>
+</header>
+
+<div class="alerts" id="alerts"></div>
+
+<main id="view">
+  <!-- ============ 性能 / 首页 ============ -->
+  <section class="page active" id="page-perf">
+    <div class="overview" id="overview"></div>
+    <div class="card" id="cpu-card">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#ff6b6b,#fa5252)">🧠</div>
+        <div class="tt">CPU</div><div class="tag" id="cpu-model"></div></div>
+      <div class="rows" id="cpu-rows"></div>
+      <div class="cores" id="cpu-cores"></div>
+    </div>
+    <div class="card" id="gpu-card">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#a78bfa,#7c5cff)">🎮</div>
+        <div class="tt">GPU</div><div class="tag" id="gpu-model"></div></div>
+      <div class="rows" id="gpu-rows"></div>
+    </div>
+  </section>
+
+  <!-- ============ 存储 ============ -->
+  <section class="page" id="page-storage">
+    <div class="card" id="mem-card">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#4dabf7,#3b5bdb)">💾</div>
+        <div class="tt" data-i18n="memory">内存</div><div class="tag" id="mem-tag"></div></div>
+      <div class="rows" id="mem-rows"></div>
+    </div>
+    <div class="card" id="disk-card">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#3ddc97,#20c997)">🗄️</div>
+        <div class="tt" data-i18n="disk">固态硬盘</div><div class="tag" id="disk-model"></div></div>
+      <div class="rows" id="disk-rows"></div>
+      <div id="disk-parts" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- ============ 状态 ============ -->
+  <section class="page" id="page-status">
+    <div class="stgrid">
+      <div class="card" id="net-card" style="margin-bottom:0">
+        <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#51cf66,#37b24d)">🌐</div><div class="tt" data-i18n="network">网络</div></div>
+        <div class="rows" id="net-rows" style="grid-template-columns:1fr"></div>
+      </div>
+      <div class="card" id="thermal-card" style="margin-bottom:0">
+        <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#ffa94d,#f76707)">🌡️</div><div class="tt" data-i18n="thermal">温度</div></div>
+        <div id="thermal-rows"></div>
+      </div>
+      <!-- v3.1.4：帧率检测卡片已移除，桌面刷新/卡顿问题源头 -->
+      <div class="card" id="batt-card" style="margin-bottom:0">
+        <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#a3e635,#5c940d)">🔋</div><div class="tt" data-i18n="battery">电池</div></div>
+        <div class="rows" id="batt-rows" style="grid-template-columns:1fr"></div>
+      </div>
+      <div class="card" id="proc-card" style="margin-bottom:0;cursor:pointer" onclick="openProcs()">
+        <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#22b8cf,#1098ad)">⚙️</div><div class="tt" data-i18n="process">进程</div><div class="tag" data-i18n="clickView">点击查看 ›</div></div>
+        <div class="rows" id="proc-rows" style="grid-template-columns:1fr"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 设置 ============ -->
+  <section class="page" id="page-settings">
+    <div class="card">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#38bdf8,#818cf8)">🔗</div><div class="tt" data-i18n="connectPC">连接电脑</div></div>
+      <div class="field">
+        <label data-i18n="ipAddress">电脑 IP 地址</label>
+        <input type="text" id="set-ip" placeholder="例如 192.168.1.5" data-i18n-ph="ipPlaceholder" inputmode="decimal">
+        <div class="ip-hint" data-i18n-html="ipHint">只填 IP，例如 <b>192.168.1.5</b>（不要含 http:// 或端口）。电脑端启动监测程序后窗口里会显示它。</div>
+      </div>
+      <div class="field">
+        <label data-i18n="port">端口</label>
+        <input type="number" id="set-port" placeholder="8888" inputmode="numeric">
+        <div class="ip-hint" data-i18n-html="portHint">只填数字，例如 <b>8888</b>（默认已是 8888）。</div>
+      </div>
+      <button class="ov" style="width:100%;text-align:center;padding:13px" onclick="saveConn()">
+        <div class="nm" style="font-size:14px;color:#fff;font-weight:600" data-i18n="saveAndConnect">保存并连接</div>
+      </button>
+      <div class="savetip" id="save-tip"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#f472b6,#db2777)">⏱️</div><div class="tt" data-i18n="refreshInterval">刷新间隔</div></div>
+      <div class="seg" id="interval-seg">
+        <button data-v="0.5">实时</button>
+        <button data-v="1" class="on">1s</button>
+        <button data-v="2">2s</button>
+        <button data-v="3">3s</button>
+        <button data-v="5">5s</button>
+        <button data-v="10">10s</button>
+      </div>
+      <div class="ip-hint" data-i18n="intervalHint">实时=0.5秒刷新（SSE 推送，非轮询）；数值越小越流畅，越大越省电</div>
+    </div>
+
+    <div class="card">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#fbbf24,#f59e0b)">🔔</div><div class="tt" data-i18n="alert">报警提醒</div></div>
+      <div class="row">
+        <div class="lb" data-i18n="enableAlert">开启告警</div>
+        <label class="switch"><input type="checkbox" id="set-alert" checked><span class="sl"></span></label>
+      </div>
+    </div>
+
+    <!-- v3.1.4：帧率采集开关已移除（帧率检测导致桌面刷新卡顿，彻底禁用） -->
+
+    <div class="card" id="theme-card" style="display:none">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#a3e635,#5c940d)">🎨</div><div class="tt" data-i18n="appearance">外观</div></div>
+      <div class="seg" id="theme-seg">
+        <button data-v="dark" class="on" data-i18n="dark">深色</button>
+        <button data-v="light" data-i18n="light">浅色</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#a3e635,#5c940d)">🌐</div><div class="tt" data-i18n="language">语言</div></div>
+      <div class="seg" id="lang-seg">
+        <button data-v="system" data-i18n="langSystem">跟随系统</button>
+        <button data-v="zh">中文</button>
+        <button data-v="en">English</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#94a3b8,#64748b)">ℹ️</div><div class="tt" data-i18n="about">关于</div></div>
+      <div class="rows" style="grid-template-columns:1fr">
+        <div class="kv"><div class="k" data-i18n="version">版本</div><div class="v" id="about-ver">3.1.7</div></div>
+        <div class="kv"><div class="k" data-i18n="buildDate">构建日期</div><div class="v" id="about-date" style="font-size:14px">2026-11-26</div></div>
+        <div class="kv" style="grid-column:1/-1"><div class="k" data-i18n="updateNote">本次更新</div><div class="v" style="font-size:12px;font-weight:400;line-height:1.6" id="about-change">新增中英文多语言：设置页可切换 跟随系统 / 中文 / English</div></div>
+      </div>
+    </div>
+    <!-- v3.0.6 驾驶舱入口（设置页保留为跳转；主入口在底部第 5 个 tab） -->
+    <div class="card" id="pb-entry-card">
+      <div class="card-hd"><div class="ic" style="background:linear-gradient(135deg,#4cc9f0,#a78bfa)">🛞</div><div class="tt" data-i18n="cockpit">驾驶舱</div><div class="tag" data-i18n="cockpitLandscape">横屏全屏</div></div>
+      <button class="ov" id="pb-open-btn" style="width:100%;text-align:center;padding:13px">
+        <div class="nm" style="font-size:14px;color:#fff;font-weight:600" data-i18n="cockpitOpen">打开驾驶舱 ›</div>
+      </button>
+    </div>
+    <div style="text-align:center;font-size:11px;color:var(--txt3);padding:8px 0 4px" data-i18n="footer">电脑监测 · 局域网直连，数据不出内网</div>
+  </section>
+</main>
+
+<!-- 详情覆盖层 -->
+<div class="overlay" id="detail-ov">
+  <div class="ov-head">
+    <button class="back" onclick="closeDetail()">‹</button>
+    <div class="tt" id="detail-title" data-i18n="detail">详情</div>
+  </div>
+  <div class="ov-body" id="detail-body"></div>
+</div>
+
+<!-- 进程覆盖层 -->
+<div class="overlay" id="proc-ov">
+  <div class="ov-head">
+    <button class="back" onclick="closeProcs()">‹</button>
+    <div class="tt" data-i18n="process">进程</div>
+    <div style="margin-left:auto;display:flex;gap:4px" id="proc-sort"></div>
+  </div>
+  <div class="ov-body" id="proc-body"></div>
+</div>
+
+<!-- 帧率进程点选（搜索 + 点选，PID 优先） -->
+<div class="overlay" id="fps-pick-ov">
+  <div class="ov-head">
+    <button class="back" onclick="closeFpsPicker()">‹</button>
+    <div class="tt" data-i18n="fpsPickTitle">选择要抓取的进程</div>
+  </div>
+  <div class="ov-body">
+    <input id="fps-pick-search" class="fps-pick-search" type="search" data-i18n-ph="fpsPickSearch" placeholder="搜索进程名 / PID">
+    <div class="fps-pick-hint" data-i18n="fpsPickGameHint">排在前面的是游戏（占GPU/有窗口）</div>
+    <div id="fps-pick-list"></div>
+  </div>
+</div>
+
+<!-- 进程详情 -->
+<div class="mask" id="mask" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet">
+  <div class="grab"></div>
+  <div class="s-title" id="s-title"></div>
+  <div class="s-sub" id="s-sub"></div>
+  <div class="rows" id="s-rows"></div>
+</div>
+
+<nav class="tabbar">
+  <button class="on" data-tab="perf"><span class="ti">📊</span><span data-i18n="tabPerf">性能</span></button>
+  <button data-tab="storage"><span class="ti">💽</span><span data-i18n="tabStorage">存储</span></button>
+  <button data-tab="status"><span class="ti">📡</span><span data-i18n="tabStatus">状态</span></button>
+  <button data-tab="settings"><span class="ti">⚙️</span><span data-i18n="tabSettings">设置</span></button>
+  <button data-tab="cockpit"><span class="ti">🛞</span><span data-i18n="tabCockpit">驾驶舱</span></button>
+</nav>
+
+<!-- ============ v3.0.6 驾驶舱：横屏两屏布局限定在本覆盖层（左仪表盘/右12方块键） ============ -->
+<div class="pb-root" id="page-cockpit" aria-hidden="true">
+
+  <!-- 竖屏提示：整屏只显示"请将手机横屏使用" -->
+  <div id="rot">
+    <div class="ph">📱↻</div>
+    <div style="font-size:2.4vh;color:#e7ebf2">请将手机横屏使用</div>
+    <div style="font-size:1.8vh">驾驶舱支持横屏展示</div>
+  </div>
+
+  <div id="stage">
+    <!-- 第 1 屏：仪表盘 -->
+    <section class="page">
+      <div class="top">
+        <div class="clock-card">
+          <div class="clock" id="clk">--:--<small id="sec">--</small></div>
+          <div class="date" id="dt">----</div>
+          <div class="weather"><span class="ico" id="wtIco">🌙</span><span id="wt">--</span><span class="sub" id="wsub"></span></div>
+        </div>
+        <div class="np-card" id="npCard">
+          <div class="np-head">
+            <img class="np-cover" id="npCover" alt="" />
+            <div class="np-meta">
+              <div class="np-tag">NOW PLAYING</div>
+              <div class="np-title" id="npTitle">暂无播放</div>
+              <div class="np-artist" id="npArtist">—</div>
+            </div>
+          </div>
+          <div>
+            <div class="np-bar"><i id="npProg"></i></div>
+            <div class="np-time"><span id="npCur">--:--</span><span id="npDur">--:--</span></div>
+            <div class="np-ctrl">
+              <button type="button" data-act="1">⏮</button><button type="button" class="play" id="npPlay" data-act="2">⏸</button><button type="button" data-act="3">⏭</button>
+              <button type="button" style="font-size:2vh;margin-left:2vw" data-act="4">🔊</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="metrics">
+        <div class="m cpu">
+          <div class="lab">CPU</div>
+          <div class="val" id="cpuV">--<span>%</span></div>
+          <div class="ext" id="cpuT">--</div>
+          <div class="rows">
+            <div class="r"><span>主频</span><b id="cpuFreq">--</b></div>
+            <div class="r"><span>功耗</span><b id="cpuPwr">--</b></div>
+            <div class="r"><span>核心</span><b id="cpuCore">--</b></div>
+            <div class="r"><span>进程</span><b id="cpuProc">--</b></div>
+          </div>
+          <div class="foot">
+            <div class="cores" id="cpuCores"></div>
+            <div class="ft-lab"><span>占用</span><span id="cpuFootPct">--</span></div>
+            <div class="prog"><i id="cpuProg" style="width:0%;background:var(--pb-cpu)"></i></div>
+          </div>
+        </div>
+        <div class="m gpu">
+          <div class="lab">GPU</div>
+          <div class="val" id="gpuV">--<span>%</span></div>
+          <div class="ext" id="gpuT">--</div>
+          <div class="rows">
+            <div class="r"><span>显存</span><b id="gpuMem">--</b></div>
+            <div class="r"><span>核心频率</span><b id="gpuFreq">--</b></div>
+            <div class="r"><span>热点</span><b id="gpuHot">--</b></div>
+            <div class="r"><span>风扇</span><b id="gpuFan">--</b></div>
+          </div>
+          <div class="foot">
+            <svg class="spark" id="gpuSvg" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--pb-gpu)" stroke-width="2" points=""/></svg>
+            <div class="ft-lab"><span>显存</span><span id="gpuMemPct">--</span></div>
+            <div class="prog"><i id="gpuMemProg" style="width:0%;background:var(--pb-gpu)"></i></div>
+          </div>
+        </div>
+        <div class="m ram">
+          <div class="lab">RAM</div>
+          <div class="val" id="ramV">--<span>GB</span></div>
+          <div class="ext" id="ramT">/ -- GB</div>
+          <div class="rows">
+            <div class="r"><span>占用率</span><b id="ramPct">--</b></div>
+            <div class="r"><span>可用</span><b id="ramFree">--</b></div>
+            <div class="r"><span>交换区</span><b id="ramSwap">--</b></div>
+            <div class="r"><span>频率</span><b id="ramSpd">--</b></div>
+          </div>
+          <div class="foot">
+            <div class="ft-lab"><span>内存占用</span><span id="ramFootPct">--</span></div>
+            <div class="prog"><i id="ramP" style="width:0%;background:var(--pb-ram)"></i></div>
+            <div class="ft-lab"><span>交换区</span><span id="ramSwapLbl">--</span></div>
+            <div class="prog"><i id="ramSwapProg" style="width:0%;background:var(--pb-ram)"></i></div>
+          </div>
+        </div>
+        <div class="m net">
+          <div class="lab">NETWORK</div>
+          <div class="val" id="netV">--<span>K/s</span></div>
+          <div class="ext" id="netT">--</div>
+          <div class="rows">
+            <div class="r"><span>上传</span><b id="netUp">--</b></div>
+            <div class="r"><span>延迟</span><b id="netPing">--</b></div>
+            <div class="r"><span>累计↓</span><b id="netRx">--</b></div>
+            <div class="r"><span>累计↑</span><b id="netTx">--</b></div>
+          </div>
+          <div class="foot">
+            <div class="ft-lab"><span>实时吞吐</span><span id="netFootSpd">--</span></div>
+            <svg class="spark" id="netSvg" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline fill="none" stroke="var(--pb-net)" stroke-width="2" points=""/></svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 第 2 屏：方块键控制台 -->
+    <section class="page">
+      <div class="deck-wrap">
+        <div class="statbar">
+          <div class="stat"><div class="sl">音量</div><div class="sv" id="stVol">--<small>%</small></div><div class="sbar"><i id="stVolB" style="width:0%;background:var(--pb-accent)"></i></div></div>
+          <div class="stat"><div class="sl">电源计划</div><div class="sv" id="stPwr">--</div><div class="sbar"><i style="width:60%;background:var(--pb-gpu)"></i></div></div>
+          <div class="stat"><div class="sl">屏幕亮度</div><div class="sv" id="stBri">--<small>%</small></div><div class="sbar"><i id="stBriB" style="width:0%;background:var(--pb-net)"></i></div></div>
+          <div class="stat"><div class="sl">运行时长</div><div class="sv" id="stUp">--</div><div class="sbar"><i style="width:35%;background:var(--pb-ram)"></i></div></div>
+        </div>
+        <div class="deck" id="deck"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="dots">
+    <i class="on" data-p="0"></i><i data-p="1"></i>
+  </div>
+
+  <!-- 返回键：右下角，避开状态栏与底部页码点 -->
+  <button type="button" class="pb-back" id="pb-back-btn">返回 ‹</button>
+</div>
+
+<script>
+/* ============ 工具函数 ============ */
+const $=id=>document.getElementById(id);
+function g(o,p){let c=o;for(const s of p.split('.')){if(c==null)return null;c=c[s];}return c;}
+const isNum=v=>v!=null&&!isNaN(v);
+/* 统一空值判断：undefined/null/空串/空对象 都视为"无数据"（不含空数组、数值 0） */
+function isEmpty(v){return v==null||v===''||(typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length===0);}
+function fmtBytes(n){if(!isNum(n))return null;const u=['B','KB','MB','GB','TB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return (n<10&&i>0?n.toFixed(1):n.toFixed(0))+' '+u[i];}
+function fmtSpeed(n){if(!isNum(n))return null;return fmtBytes(n)+'/s';}
+function fmtHz(n){if(!isNum(n))return null;if(n>=1e9)return (n/1e9).toFixed(2)+' GHz';if(n>=1e6)return (n/1e6).toFixed(0)+' MHz';return (n/1e3).toFixed(0)+' KHz';}
+/* 拆分频率为 {num,unit}，便于数字大、单位小一档的独立渲染 */
+function fmtHzParts(n){
+  if(!isNum(n))return null;
+  if(n>=1e9)return {num:(n/1e9).toFixed(2),unit:'GHz'};
+  if(n>=1e6)return {num:(n/1e6).toFixed(0),unit:'MHz'};
+  return {num:(n/1e3).toFixed(0),unit:'KHz'};
+}
+/* 性能状态归一化：pstate 可能是 "P8" 或 "8"，统一返回 "P8"（无则 null） */
+function normPstate(s){
+  if(s==null||s==='')return null;
+  const m=String(s).trim().toUpperCase().match(/P?\s*(\d+)/);
+  return m?'P'+m[1]:null;
+}
+function fmtW(n){return isNum(n)?(n<10?n.toFixed(1):n.toFixed(0))+' W':null;}
+function fmtTemp(n){return isNum(n)?n.toFixed(0)+'°C':null;}
+function fmtPct(n){return isNum(n)?n.toFixed(0)+'%':null;}
+function fmtDur(s){if(!isNum(s))return null;s=Math.round(s);const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);if(d>0)return d+t('day')+h+t('hourShort');if(h>0)return h+t('hourShort')+m+t('minShort');return m+t('minShort');}
+function pctColor(v){if(!isNum(v))return 'var(--txt3)';return v>=90?'var(--red)':v>=70?'var(--yellow)':'var(--green)';}
+function tempColor(v){if(!isNum(v))return 'var(--txt3)';return v>=80?'var(--red)':v>=60?'var(--yellow)':'var(--green)';}
+function battColor(v){if(!isNum(v))return 'var(--txt3)';return v<=10?'var(--red)':v<=20?'var(--yellow)':'var(--green)';}
+function fpsColor(v){if(!isNum(v))return 'var(--txt3)';return v<30?'var(--red)':v<60?'var(--yellow)':'var(--green)';}
+
+/* ============ 全局状态 ============ */
+let S=null, PROCS=null, es=null, procSort='cpu', procExpanded={'not_responding':true,'running':true,'sleeping':true,'suspended':true};
+const APP_VERSION='3.1.7';
+const BUILD_DATE='2026-11-26';
+
+/* ============ 多语言 i18n ============ */
+const I18N={
+zh:{
+  appName:'电脑监测',
+  notConnected:'未连接', connecting:'连接中', connected:'已连接',
+  disconnectedReconnecting:'已断开，重连中', connFailed:'连接失败', noIP:'未设置IP',
+  pleaseSetIP:'请在「设置」填写电脑 IP 和端口', connectedTo:'已连接 {addr}',
+  serverError:'服务器响应异常',
+  httpError:'服务器返回 HTTP {status}（端口可能被别的程序占用）',
+  timeoutError:'连接超时：请确认 IP/端口正确，且手机电脑同一 WiFi',
+  netError:'无法连接：可能防火墙拦截、明文 HTTP 被禁或 IP 写错',
+  unknownError:'未知错误：{msg}', dataChannelDown:'数据通道中断，3 秒后自动重连',
+  tabPerf:'性能', tabStorage:'存储', tabStatus:'状态', tabSettings:'设置', tabCockpit:'驾驶舱',
+  cockpit:'驾驶舱', cockpitLandscape:'横屏全屏', cockpitOpen:'打开驾驶舱 ›',
+  cockpitClock:'本地时间', cockpitPlaying:'正在播放', cockpitSummary:'系统概览',
+  cockpitPortrait:'请将手机横屏使用', cockpitPortraitHint:'驾驶舱为横屏仪表布局', cockpitContinue:'仍要使用',
+  cockpitDash:'仪表盘', cockpitConsole:'控制台', cockpitBack:'返回 ‹',
+  cockpitVolume:'音量', cockpitPower:'电源计划', cockpitBrightness:'亮度', cockpitUptime:'运行时长',
+  pbTemp:'温度', pbFreq:'频率', pbClock:'频率', pbSwap:'交换区',
+  pbNoPlaying:'暂无播放', pbActionOk:'已发送', pbActionFail:'执行失败', pbNotReady:'未就绪',
+  pbPrev:'上一曲', pbPlay:'播放/暂停', pbNext:'下一曲', pbMute:'静音',
+  pbTerminal:'Terminal', pbVscode:'VS Code', pbBrowser:'浏览器', pbFiles:'文件',
+  pbTaskmgr:'任务管理器', pbShot:'截图', pbSleep:'息屏', pbLock:'锁屏',
+  cpu:'CPU', gpu:'GPU', memory:'内存', disk:'固态硬盘', network:'网络', thermal:'温度',
+  battery:'电池', process:'进程', clickView:'点击查看 ›',
+  fpsTitle:'帧率', fpsAvg:'平均', fpsLow1:'1% Low', fpsFrameTime:'帧时间', fpsGame:'游戏', fpsNone:'无',
+  fpsReasonDisabled:'请先到设置页开启采集', fpsReasonNoGame:'未检测到游戏，开游戏即自动识别', fpsReasonWaitingGame:'等待游戏窗口', fpsReasonNoPermission:'需管理员/性能日志用户组', fpsReasonNoProcess:'进程已退出或 PID 不匹配，请重新点选游戏进程', fpsReasonPresentmonMissing:'未找到 PresentMon', fpsReasonLauncher:'请等游戏本体启动', fpsReasonStartFailed:'采集启动失败', fpsReasonWarming:'采集中…', fpsReasonOk:'已采到帧',
+  fpsLocked:'已锁定进程 {name}，采集中', fpsCapturingLocked:'采集中 · 已锁定 {name}', fpsPickTitle:'选择要抓取的进程', fpsPickSearch:'搜索进程名 / PID', fpsPickLoading:'正在读取进程列表…', fpsPickEmpty:'没有匹配的进程', fpsPickGpu:'占用GPU', fpsPickWindow:'有窗口', fpsPickGameHint:'排在前面的是游戏（占GPU/有窗口）', fpsCleared:'已取消手动指定，恢复自动识别', fpsTargetFailed:'锁定失败：{msg}',
+  fpsCapturing:'采集中', fpsWaiting:'等待游戏', thermalNoLhmShort:'未检测到 LibreHardwareMonitor', chargingTxt:'充电中', dischargingTxt:'未充电', battNone:'无电池',
+  gpuName:'显卡', diskName:'硬盘', freeRemain:'%剩余',
+  cpuTotal:'总使用率', cpuFreq:'主频', cpuUser:'用户态', cpuSystem:'内核态',
+  cpuTemp:'温度', cpuPackagePower:'封装功耗',
+  subLive:'实时', subInstant:'瞬时', subCoreAvg:'核心均温', subShare:'占比',
+  gpuUsage:'使用率', gpuTemp:'温度', gpuVram:'显存', gpuPower:'功耗',
+  gpuCoreClock:'核心频率', gpuMemClock:'显存频率', gpuState:'状态', liveCore:'实时·核心', perfState:'性能状态', fan:'风扇',
+  memUsage:'使用率', memUsed:'已用', memAvailable:'可用', memCommit:'提交量', memCached:'缓存', memFreq:'频率',
+  diskRead:'读取速度', diskWrite:'写入速度', diskReadLatency:'读延迟', diskWriteLatency:'写延迟',
+  diskBusy:'磁盘忙碌', diskTemp:'温度', diskLife:'寿命', diskPowerOn:'通电时长',
+  total:'总', used:'已用', remain:'剩',
+  netDown:'下载', netUp:'上传', netLatency:'延迟', netLoss:'丢包',
+  netDownTotal:'累计下载', netUpTotal:'累计上传', netTcp:'TCP 连接',
+  thermalGpu:'显卡温度', thermalCpuTemp:'CPU温度', thermalGpuFreq:'GPU频率', thermalCpuFreq:'CPU频率', thermalGpuPower:'GPU功耗', thermalCpuPower:'CPU功耗',
+  thermalMbTemp:'主板温度', thermalDiskTemp:'硬盘温度', thermalFan:'风扇转速',
+  thermalNoLhm:'未检测到 LibreHardwareMonitor（CPU/硬盘/主板温度需另装）',
+  battLevel:'电量', battStatus:'状态', battPower:'功率', battTimeLeft:'续航', battHealth:'健康', fpsManual:'手动指定进程名', fpsManualHint:'填 game.exe 后回车', fpsBackAuto:'恢复自动', fpsAutoRestored:'已恢复自动识别',
+  procCount:'进程', threadCount:'线程', handleCount:'句柄', uptime:'开机时长',
+  detail:'详情', detailInfo:'详细信息', perCore:'每核心', baseFreq:'基频',
+  processorQueue:'处理器队列', interrupts:'中断/秒', coreCount:'核心数',
+  memTotal:'总量', pageSwap:'页交换', nonpagedPool:'非分页池', diskQueue:'队列长度', freeSpace:'剩余空间',
+  usage:'使用率',
+  sortByCpu:'按CPU', sortByMem:'按内存', sortByName:'按名称',
+  loadingProcs:'加载进程列表…', procLoadFailed:'无法获取进程数据，请检查连接',
+  stateNotResponding:'无响应', stateRunning:'运行中', stateSleeping:'睡眠', stateSuspended:'已挂起',
+  showAll:'显示全部 {n} 个', unknown:'未知', unknownProc:'未知进程',
+  procStatus:'状态', cpuUsage:'CPU 占用', cpuPeak:'CPU 峰值', memUsageText:'内存占用', threadNum:'线程数',
+  path:'路径', cmdline:'命令行', procDetail:'进程详情',
+  day:'天', hourShort:'时', minShort:'分',
+  connectPC:'连接电脑', ipAddress:'电脑 IP 地址', ipPlaceholder:'例如 192.168.1.5',
+  ipHint:'只填 IP，例如 <b>192.168.1.5</b>（不要含 http:// 或端口）。电脑端启动监测程序后窗口里会显示它。',
+  port:'端口', portHint:'只填数字，例如 <b>8888</b>（默认已是 8888）。',
+  saveAndConnect:'保存并连接', refreshInterval:'刷新间隔', intervalHint:'实时=0.5秒刷新（SSE 推送，非轮询）；数值越小越流畅，越大越省电', alert:'报警提醒', enableAlert:'开启告警',
+  fpsEnableTitle:'游戏帧率', fpsEnable:'游戏帧率采集', fpsEnableHint:'需电脑端放置 PresentMon 并以管理员权限运行',
+  appearance:'外观', dark:'深色', light:'浅色', about:'关于', version:'版本', buildDate:'构建日期',
+  updateNote:'本次更新', footer:'电脑监测 · 局域网直连，数据不出内网',
+  language:'语言', langSystem:'跟随系统',
+  savedConnecting:'✓ 已保存，正在连接 {addr}…', savedNoIp:'✓ 已保存（IP 为空，请先填写电脑 IP）',
+  cleanedConfig:'已自动清理旧格式的 IP/端口，请到「设置」确认后点保存',
+  alertNotifyTitle:'电脑监测告警',
+  changelog:'v3.0.6：进入驾驶舱自动横屏+退出恢复；天气与在播卡片补齐；安全区适配（仪表盘+控制台两屏、12 个电脑端动作键）；状态接口扩展 core/显存/网速/音量/亮度/电源/播放等信息；游戏帧率保持全局抓取+自动识别，零手动',
+  unitCount:'{n} 个', unitThreads:'{n} 线程', unitHours:'{n} 小时',
+},
+en:{
+  appName:'PC Monitor',
+  notConnected:'Not connected', connecting:'Connecting…', connected:'Connected',
+  disconnectedReconnecting:'Disconnected, reconnecting…', connFailed:'Connection failed', noIP:'No IP set',
+  pleaseSetIP:'Set the PC IP and port in Settings', connectedTo:'Connected {addr}',
+  serverError:'Server returned an unexpected response',
+  httpError:'Server returned HTTP {status} (port may be in use)',
+  timeoutError:'Connection timed out: check IP/port and that both devices are on the same Wi-Fi',
+  netError:'Cannot connect: firewall may be blocking, or the IP is wrong',
+  unknownError:'Unknown error: {msg}', dataChannelDown:'Data stream interrupted, reconnecting in 3s',
+  tabPerf:'Performance', tabStorage:'Storage', tabStatus:'Status', tabSettings:'Settings', tabCockpit:'Cockpit',
+  cockpit:'Cockpit', cockpitLandscape:'Landscape full screen', cockpitOpen:'Open cockpit ›',
+  cockpitClock:'Local time', cockpitPlaying:'Now playing', cockpitSummary:'System overview',
+  cockpitPortrait:'Please rotate your phone to landscape', cockpitPortraitHint:'Cockpit is designed for landscape',
+  cockpitContinue:'Use anyway', cockpitDash:'Dashboard', cockpitConsole:'Controls', cockpitBack:'Back ‹',
+  cockpitVolume:'Volume', cockpitPower:'Power plan', cockpitBrightness:'Brightness', cockpitUptime:'Uptime',
+  pbTemp:'Temp', pbFreq:'Clock', pbClock:'Clock', pbSwap:'Swap',
+  pbNoPlaying:'Nothing playing', pbActionOk:'Sent', pbActionFail:'Failed', pbNotReady:'Not ready',
+  pbPrev:'Previous', pbPlay:'Play/Pause', pbNext:'Next', pbMute:'Mute',
+  pbTerminal:'Terminal', pbVscode:'VS Code', pbBrowser:'Browser', pbFiles:'Files',
+  pbTaskmgr:'Task Manager', pbShot:'Screenshot', pbSleep:'Screen off', pbLock:'Lock',
+  cpu:'CPU', gpu:'GPU', memory:'Memory', disk:'Disk', network:'Network', thermal:'Temperature',
+  battery:'Battery', process:'Processes', clickView:'Tap to view ›',
+  fpsTitle:'FPS', fpsAvg:'Average', fpsLow1:'1% Low', fpsFrameTime:'Frame Time', fpsGame:'Game', fpsNone:'N/A',
+  fpsReasonDisabled:'Enable capture in Settings first', fpsReasonNoGame:'No game detected — starts automatically', fpsReasonWaitingGame:'Waiting for game window', fpsReasonNoPermission:'Admin / Perf Log Users', fpsReasonNoProcess:'Process exited / PID mismatch — please re-pick the game', fpsReasonPresentmonMissing:'PresentMon not found', fpsReasonLauncher:'Waiting for the game itself', fpsReasonStartFailed:'Capture start failed', fpsReasonWarming:'Capturing…', fpsReasonOk:'Frames captured',
+  fpsLocked:'Locked process {name}, capturing', fpsCapturingLocked:'Capturing · locked {name}', fpsPickTitle:'Pick a process to capture', fpsPickSearch:'Search name / PID', fpsPickLoading:'Loading process list…', fpsPickEmpty:'No matching process', fpsPickGpu:'GPU', fpsPickWindow:'Window', fpsPickGameHint:'Games (GPU/window) are listed first', fpsCleared:'Manual target cleared, back to auto', fpsTargetFailed:'Failed to lock process: {msg}',
+  fpsCapturing:'Capturing', fpsWaiting:'Waiting for game', thermalNoLhmShort:'LibreHardwareMonitor not detected', chargingTxt:'Charging', dischargingTxt:'Not charging', battNone:'No battery',
+  gpuName:'GPU', diskName:'Disk', freeRemain:'% free',
+  cpuTotal:'Total', cpuFreq:'Clock', cpuUser:'User', cpuSystem:'Kernel',
+  cpuTemp:'Temp', cpuPackagePower:'Package Power',
+  subLive:'Live', subInstant:'Instant', subCoreAvg:'Core avg', subShare:'Share',
+  gpuUsage:'Usage', gpuTemp:'Temp', gpuVram:'VRAM', gpuPower:'Power',
+  gpuCoreClock:'Core Clock', gpuMemClock:'Memory Clock', gpuState:'State', liveCore:'Live · Core', perfState:'P-State', fan:'Fan',
+  memUsage:'Usage', memUsed:'Used', memAvailable:'Available', memCommit:'Committed', memCached:'Cached', memFreq:'Clock',
+  diskRead:'Read', diskWrite:'Write', diskReadLatency:'Read latency', diskWriteLatency:'Write latency',
+  diskBusy:'Busy', diskTemp:'Temp', diskLife:'Health', diskPowerOn:'Power-on hours',
+  total:'Total', used:'Used', remain:'Free',
+  netDown:'Down', netUp:'Up', netLatency:'Latency', netLoss:'Loss',
+  netDownTotal:'Total down', netUpTotal:'Total up', netTcp:'TCP conns',
+  thermalGpu:'GPU Temp', thermalCpuTemp:'CPU Temp', thermalGpuFreq:'GPU Clock', thermalCpuFreq:'CPU Clock', thermalGpuPower:'GPU Power', thermalCpuPower:'CPU Power',
+  thermalMbTemp:'Mobo Temp', thermalDiskTemp:'Disk Temp', thermalFan:'Fan RPM',
+  thermalNoLhm:'LibreHardwareMonitor not detected (needed for CPU/disk/mobo temps)',
+  battLevel:'Level', battStatus:'Status', battPower:'Power', battTimeLeft:'Left', battHealth:'Health', fpsManual:'Set process name', fpsManualHint:'Enter game.exe then press Enter', fpsBackAuto:'Back to auto', fpsAutoRestored:'Auto detection restored',
+  procCount:'Processes', threadCount:'Threads', handleCount:'Handles', uptime:'Uptime',
+  detail:'Details', detailInfo:'Details', perCore:'Per-core', baseFreq:'Base clock',
+  processorQueue:'Processor queue', interrupts:'Interrupts/s', coreCount:'Cores',
+  memTotal:'Total', pageSwap:'Page faults', nonpagedPool:'Non-paged pool', diskQueue:'Queue length', freeSpace:'Free space',
+  usage:'Usage',
+  sortByCpu:'By CPU', sortByMem:'By Memory', sortByName:'By Name',
+  loadingProcs:'Loading processes…', procLoadFailed:'Cannot load processes, check connection',
+  stateNotResponding:'Not responding', stateRunning:'Running', stateSleeping:'Sleeping', stateSuspended:'Suspended',
+  showAll:'Show all {n}', unknown:'Unknown', unknownProc:'Unknown process',
+  procStatus:'Status', cpuUsage:'CPU', cpuPeak:'CPU peak', memUsageText:'Memory', threadNum:'Threads',
+  path:'Path', cmdline:'Command line', procDetail:'Process details',
+  day:'d', hourShort:'h', minShort:'min',
+  connectPC:'Connect PC', ipAddress:'PC IP address', ipPlaceholder:'e.g. 192.168.1.5',
+  ipHint:'Enter only the IP, e.g. <b>192.168.1.5</b> (no http:// or port). The PC app shows it after launch.',
+  port:'Port', portHint:'Enter only numbers, e.g. <b>8888</b> (default is already 8888).',
+  saveAndConnect:'Save & Connect', refreshInterval:'Refresh interval', intervalHint:'Real-time = 0.5s refresh (SSE push, no polling); smaller is smoother, larger saves battery', alert:'Alerts', enableAlert:'Enable alerts',
+  fpsEnableTitle:'FPS', fpsEnable:'FPS capture', fpsEnableHint:'Requires PresentMon on the PC and admin rights',
+  appearance:'Appearance', dark:'Dark', light:'Light', about:'About', version:'Version', buildDate:'Build date',
+  updateNote:"What's new", footer:'PC Monitor · Direct LAN connection, data stays local',
+  language:'Language', langSystem:'System',
+  savedConnecting:'✓ Saved, connecting {addr}…', savedNoIp:'✓ Saved (IP is empty, enter the PC IP first)',
+  cleanedConfig:'Cleaned old IP/port format, confirm in Settings and tap Save',
+  alertNotifyTitle:'PC Monitor alert',
+  changelog:'v3.0.6: Auto landscape in cockpit + restore portrait; weather/now-playing; safe-area (dashboard + controls, 12 PC action keys); status API extended with cores/VRAM/network/audio/brightness/power/now-playing; FPS stays global + auto-detected with zero manual steps',
+  unitCount:'{n}', unitThreads:'{n} threads', unitHours:'{n} h',
+}
+};
+let langPref = localStorage.getItem('pc_lang')||'system';
+let curLang = 'zh';
+function resolveLang(){
+  if(langPref==='zh'||langPref==='en') return langPref;
+  const nav=(navigator.language||(navigator.languages&&navigator.languages[0])||'en').toLowerCase();
+  return nav.indexOf('zh')===0?'zh':'en';
+}
+function t(key,params){
+  const d=I18N[curLang]||I18N.zh;
+  let s=(key in d)?d[key]:((key in I18N.zh)?I18N.zh[key]:key);
+  if(params){for(const p in params){s=s.split('{'+p+'}').join(params[p]);}}
+  return s;
+}
+function applyI18n(){
+  curLang=resolveLang();
+  document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.getAttribute('data-i18n'));});
+  document.querySelectorAll('[data-i18n-html]').forEach(el=>{el.innerHTML=t(el.getAttribute('data-i18n-html'));});
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{el.setAttribute('placeholder',t(el.getAttribute('data-i18n-ph')));});
+  if(typeof applyConnUI==='function')applyConnUI();
+  if(S)render();
+}
+let theme='dark';  // 浅色模式暂未适配完成，先强制深色
+document.documentElement.dataset.theme=theme;
+
+/* ============ IP / 端口清洗（避免脏数据导致地址拼接错误） ============ */
+function cleanIP(v){
+  v=(v||'').trim();
+  if(!v)return '';
+  v=v.replace(/^https?:\/\//i,'');   // 去掉 http:// 或 https://
+  v=v.split('/')[0];                  // 去掉路径
+  const idx=v.lastIndexOf(':');
+  if(idx>0){                          // 去掉末尾 ":端口"（如 192.168.1.5:8888）
+    const tail=v.slice(idx+1);
+    if(/^\d+$/.test(tail)) v=v.slice(0,idx);
+  }
+  return v;
+}
+function cleanPort(v){
+  v=(v==null?'':String(v)).trim();
+  const m=v.match(/\d+/);
+  return m?m[0]:'8888';
+}
+function base(){
+  const ip=cleanIP(localStorage.getItem('pc_ip')||'');
+  const port=cleanPort(localStorage.getItem('pc_port')||'8888');
+  return ip?('http://'+ip+':'+port):'';
+}
+let connSt='wait', connLabelKey='connecting', connErrKey=null, connErrParams=null;
+function setConn(st,labelKey,errKey,errParams){
+  connSt=st; connLabelKey=labelKey; connErrKey=errKey||null; connErrParams=errParams||null;
+  applyConnUI();
+}
+function applyConnUI(){
+  const d=$('dot'),l=$('connlabel'),e=$('connerr');
+  d.className='dot '+(connSt==='on'?'on':connSt==='off'?'off':'wait');
+  l.textContent=t(connLabelKey);
+  const err=connErrKey?t(connErrKey,connErrParams||undefined):'';
+  e.textContent=err;
+  e.style.display=err?'block':'none';
+}
+
+/* ============ 连接（先 ping 测通，再建 SSE） ============ */
+let pingTimer=null;
+function connect(){
+  const b=base();
+  if(!b){setConn('off','noIP');$('hostline').textContent=t('pleaseSetIP');return;}
+  setConn('wait','connecting');
+  pingTest(b);
+}
+function pingTest(b){
+  const ctrl=new AbortController();
+  const to=setTimeout(()=>ctrl.abort(),5000);   // 5 秒超时
+  fetch(b+'/api/ping',{signal:ctrl.signal}).then(r=>{
+    clearTimeout(to);
+    if(!r.ok) return Promise.reject({kind:'http',status:r.status});
+    return r.json();
+  }).then(d=>{
+    if(d&&d.ok===true){ connected(b); }
+    else{ failed('serverError'); }
+  }).catch(err=>{
+    clearTimeout(to);
+    failed(pingError(err));
+  });
+}
+function pingError(err){
+  if(err&&err.kind==='http') return {key:'httpError',params:{status:err.status}};
+  if(err&&err.name==='AbortError') return {key:'timeoutError'};
+  if(err&&err.name==='TypeError') return {key:'netError'};
+  return {key:'unknownError',params:{msg:String((err&&err.message)||err||'')}};
+}
+function connected(b){
+  setConn('on','connected');
+  $('hostline').textContent=t('connectedTo',{addr:b.replace(/^https?:\/\//,'')});
+  fetch(b+'/api/snapshot').then(r=>r.json()).then(d=>{S=d;render();}).catch(()=>{});
+  syncFpsState(b);   // 设置页开关 / 状态页帧率卡 / agent 用同一份状态
+  if(es){try{es.close();}catch(_){}}
+  try{
+    es=new EventSource(b+'/api/stream');
+    es.onmessage=e=>{try{S=JSON.parse(e.data);render();}catch(_){}};
+    es.onerror=()=>{ setConn('off','disconnectedReconnecting','dataChannelDown'); scheduleReconnect(); };
+  }catch(e){}
+}
+function failed(reason){
+  let key=reason, params;
+  if(reason&&typeof reason==='object'){ key=reason.key; params=reason.params; }
+  setConn('off','connFailed',key,params);
+  $('hostline').textContent=t('connFailed');
+  scheduleReconnect();
+}
+function scheduleReconnect(){
+  if(pingTimer) clearTimeout(pingTimer);
+  pingTimer=setTimeout(()=>{ const b=base(); if(b) pingTest(b); },3000);
+}
+
+/* ============ 渲染 ============ */
+function render(){
+  if(!S)return;
+  const h=S.host||{};
+  $('hostline').textContent=(h.hostname||'')+(h.platform?' · '+h.platform+' '+h.release:'');
+  renderOverview(); renderCpu(); renderGpu(); renderMem(); renderDisk();
+  renderNet(); renderThermal(); renderFps(); renderBatt(); renderProcSummary(); renderAlerts();
+  renderMiniSparks();
+  if($('detail-ov').classList.contains('show')) renderDetail();
+}
+
+/* ============ 近60秒迷你趋势图（状态页卡片） ============ */
+const MINI_METRICS={};
+const MINI_HIST={};
+function renderMiniSparks(){
+  const now=Date.now();
+  for(const id in MINI_METRICS){
+    const m=MINI_METRICS[id];
+    const v=g(S,m.path);
+    if(v==null)continue;
+    const arr=MINI_HIST[id]||(MINI_HIST[id]=[]);
+    arr.push({t:now,v});
+    // 只保留近 60 秒
+    while(arr.length&&now-arr[0].t>60000)arr.shift();
+    drawMiniSpark($(id),arr,m.color);
+  }
+}
+function drawMiniSpark(svg,data,color){
+  if(!svg)return;
+  if(!data||data.length<2){svg.style.display='none';return;}
+  svg.style.display='block';
+  const W=300,H=48,P=2;
+  const vals=data.map(d=>d.v);const min=Math.min(...vals),max=Math.max(...vals);
+  const span=(max-min)||1;
+  const pts=data.map((d,i)=>[P+i*(W-2*P)/(data.length-1),H-P-(d.v-min)/span*(H-2*P)]);
+  const line=pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  const area=line+' '+(W-P)+','+(H-P)+' '+P+','+(H-P);
+  svg.innerHTML=`<polygon class="area" points="${area}" fill="${color}"/><polyline points="${line}" stroke="${color}"/>`;
+}
+
+function kv(v,fmt,unit){if(isEmpty(v))return null;const s=fmt(v);return s==null?null:s+(unit||'');}
+
+function renderOverview(){
+  const cpu=S.cpu||{},mem=S.memory||{},disk=S.disk||{},gpu=S.gpu||{};
+  const items=[
+    {k:'cpu',ic:'🧠',c1:'#ff6b6b',c2:'#fa5252',nm:'CPU',v:cpu.total,fmt:v=>v.toFixed(0),unit:'%',color:pctColor(cpu.total)},
+    {k:'gpu',ic:'🎮',c1:'#a78bfa',c2:'#7c5cff',nm:t('gpuName'),v:gpu.util,fmt:v=>v.toFixed(0),unit:'%',color:pctColor(gpu.util)},
+    {k:'mem',ic:'💾',c1:'#4dabf7',c2:'#3b5bdb',nm:t('memory'),v:mem.percent,fmt:v=>v.toFixed(0),unit:'%',color:pctColor(mem.percent)},
+    {k:'disk',ic:'🗄️',c1:'#3ddc97',c2:'#20c997',nm:t('diskName'),v:disk.percent_free,fmt:v=>v.toFixed(0),unit:t('freeRemain'),color:disk.percent_free!=null?(disk.percent_free<=10?'var(--red)':disk.percent_free<=25?'var(--yellow)':'var(--green)'):'var(--txt3)'},
+  ];
+  $('overview').innerHTML=items.map(it=>`
+    <div class="ov" onclick="openDetail('${it.k}')">
+      <div class="top"><div class="ic" style="background:linear-gradient(135deg,${it.c1},${it.c2})">${it.ic}</div><span class="nm">${it.nm}</span></div>
+      <div class="big" style="color:${it.color}">${it.v==null?'—':it.fmt(it.v)}<small>${it.v==null?'':it.unit}</small></div>
+      <div class="bar"><i style="width:${it.v==null?0:Math.min(100,it.v)}%;background:${it.color}"></i></div>
+    </div>`).join('');
+}
+
+function rowsHTML(list){
+  return '<div class="rows">'+list.filter(x=>x&&!isEmpty(x.v)).map(x=>`
+    <div class="kv"><div class="k">${x.k}</div><div class="v" style="${x.color?'color:'+x.color:''}">${x.v}${x.unit?'<small>'+x.unit+'</small>':''}</div></div>`).join('')+'</div>';
+}
+
+function renderCpu(){
+  const c=S.cpu||{};
+  $('cpu-model').textContent=c.name?String(c.name).split(' ').slice(0,4).join(' '):'';
+  // 3 列×2 行六格（与 GPU 卡对齐）：总使用率|主频|温度 / 用户态|内核态|封装功耗；读不到显示 "--" 占位
+  const freqParts = fmtHzParts(c.freq_current);
+  const cells=[
+    {k:t('cpuTotal'), num:isNum(c.total)?c.total.toFixed(0):null, unit:'%', color:pctColor(c.total), sub:t('subLive')},
+    {k:t('cpuFreq'), num:freqParts?freqParts.num:null, unit:freqParts?freqParts.unit:null, sub:t('subInstant')},
+    {k:t('cpuTemp'), num:isNum(c.temp_package)?c.temp_package.toFixed(0):null, unit:'℃', color:tempColor(c.temp_package), sub:t('subCoreAvg')},
+    {k:t('cpuUser'), num:isNum(c.user)?c.user.toFixed(0):null, unit:'%', sub:t('subShare')},
+    {k:t('cpuSystem'), num:isNum(c.system)?c.system.toFixed(0):null, unit:'%', sub:t('subShare')},
+    {k:t('cpuPackagePower'), num:isNum(c.package_power)?(c.package_power<10?c.package_power.toFixed(1):c.package_power.toFixed(0)):null, unit:'W', sub:t('subLive')},
+  ];
+  $('cpu-rows').innerHTML='<div class="cpu-grid">'+cells.map(x=>{
+    const val = x.num!=null ? (x.num+(x.unit?' <small>'+x.unit+'</small>':'')) : '--';
+    const sub = x.sub ? `<div class="msub">${x.sub}</div>` : '';
+    return `<div class="mcell"><div class="mk">${x.k}</div><div class="mv" style="${x.color?'color:'+x.color:''}">${val}</div>${sub}</div>`;
+  }).join('')+'</div>';
+  const cores=c.per_core||[];
+  if(cores.length){
+    $('cpu-cores').style.display='grid';
+    $('cpu-cores').innerHTML=cores.map((v,i)=>`
+      <div class="core"><i style="height:${v}%;background:${pctColor(v)}"></i><span>${i}</span></div>`).join('');
+  }else{$('cpu-cores').style.display='none';}
+}
+
+function renderGpu(){
+  const g=S.gpu||{};
+  $('gpu-model').textContent=g.name||'';
+  if(g.count==null||g.count===0){
+    $('gpu-card').style.display='none';return;
+  }
+  $('gpu-card').style.display='';
+  // 核心频率：clocks.gr 实时读数（nvidia-smi 每轮采集），非写死
+  const coreParts = fmtHzParts(g.core_clock);
+  // 性能状态归一化（P0~P12）
+  const ps = normPstate(g.pstate);
+  const fanStr = (g.fan!=null)?(t('fan')+' '+g.fan.toFixed(0)+'%'):'';
+  // 显存合并为"已用 / 总量"一栏，转 GB（1位小数）
+  const gb = v => isNum(v) ? (v/1073741824) : null;
+  const usedGb = gb(g.vram_used);
+  const totalGb = gb(g.vram_total);
+  let vramNum = null;
+  if(usedGb!=null && totalGb!=null){ vramNum = usedGb.toFixed(1)+' / '+totalGb.toFixed(1); }
+  else if(totalGb!=null){ vramNum = totalGb.toFixed(1); }
+  else if(usedGb!=null){ vramNum = usedGb.toFixed(1); }
+  // 2行×3列六格：使用率|温度|显存 / 功耗|核心频率|状态
+  const cells=[
+    {k:t('gpuUsage'),num:isNum(g.util)?g.util.toFixed(0):null,unit:'%',color:pctColor(g.util)},
+    {k:t('gpuTemp'),num:isNum(g.temp)?g.temp.toFixed(0):null,unit:'℃',color:tempColor(g.temp)},
+    {k:t('gpuVram'),num:vramNum,unit:'GB'},
+    {k:t('gpuPower'),num:isNum(g.power)?(g.power<10?g.power.toFixed(1):g.power.toFixed(0)):null,unit:'W'},
+    {k:t('gpuCoreClock'),num:coreParts?coreParts.num:null,unit:coreParts?coreParts.unit:null,sub:t('liveCore')},
+    {k:t('gpuState'),num:ps||null,unit:null,sub:fanStr||t('perfState'),color:ps?'var(--accent)':null},
+  ];
+  $('gpu-rows').innerHTML='<div class="mgrid gpu-grid">'+cells.map(x=>{
+    const val = x.num!=null ? (x.num+(x.unit?' <small>'+x.unit+'</small>':'')) : '--';
+    const sub = x.sub ? `<div class="msub">${x.sub}</div>` : '';
+    return `<div class="mcell"><div class="mk">${x.k}</div><div class="mv" style="${x.color?'color:'+x.color:''}">${val}</div>${sub}</div>`;
+  }).join('')+'</div>';
+}
+
+function renderMem(){
+  const m=S.memory||{};
+  $('mem-tag').textContent=m.total?fmtBytes(m.total):'';
+  const rows=[
+    {k:t('memUsage'),v:kv(m.percent,v=>v.toFixed(0),'%'),color:pctColor(m.percent)},
+    {k:t('memUsed'),v:kv(m.used,fmtBytes)},
+    {k:t('memAvailable'),v:kv(m.available,fmtBytes)},
+    {k:t('memCommit'),v:kv(m.commit_used,fmtBytes)},
+    {k:t('memCached'),v:kv(m.cached,fmtBytes)},
+    {k:t('memFreq'),v:kv(m.freq_mhz,v=>v.toFixed(0),'MHz')},
+  ];
+  $('mem-rows').innerHTML=rowsHTML(rows);
+}
+
+function renderDisk(){
+  const d=S.disk||{};
+  $('disk-model').textContent=d.smart_model||'';
+  // 磁盘空闲时（忙碌≈0 或延迟读不到），读/写延迟不显示，避免假的"0.0 ms"
+  const idle = (d.busy_percent==null) || (d.busy_percent<=0.05);
+  const rows=[
+    {k:t('diskRead'),v:kv(d.read_speed,fmtSpeed)},
+    {k:t('diskWrite'),v:kv(d.write_speed,fmtSpeed)},
+    {k:t('diskReadLatency'),v:(!idle&&d.read_latency_ms!=null)?kv(d.read_latency_ms,v=>v.toFixed(1),' ms'):null},
+    {k:t('diskWriteLatency'),v:(!idle&&d.write_latency_ms!=null)?kv(d.write_latency_ms,v=>v.toFixed(1),' ms'):null},
+    {k:t('diskBusy'),v:kv(d.busy_percent,v=>v.toFixed(0),'%')},
+    {k:t('diskTemp'),v:kv(d.temp,fmtTemp),color:tempColor(d.temp)},
+    {k:t('diskLife'),v:d.wear!=null?(d.wear+'%'):(d.percent_used!=null?(100-d.percent_used)+'%':null),color:d.wear!=null?(d.wear<=20?'var(--red)':d.wear<=50?'var(--yellow)':'var(--green)'):null},
+    {k:t('diskPowerOn'),v:d.power_on_hours!=null?t('unitHours',{n:d.power_on_hours}):null},
+  ];
+  $('disk-rows').innerHTML=rowsHTML(rows);
+  const parts=d.partitions||[];
+  // C/D/E 横排三列：盘符 / 容量条 / 总容量 / 已用%·剩余，文案精简不溢出
+  $('disk-parts').innerHTML=parts.length?('<div class="parts-grid">'+parts.map(p=>{
+    const usedPct = p.total?Math.round((1-p.free/p.total)*100):null;
+    const gb = v => isNum(v) ? (v/1073741824) : null;
+    const totalGb = gb(p.total);
+    const freeGb = gb(p.free);
+    const fmtG = n => n==null ? '--' : (n>=10 ? n.toFixed(0) : n.toFixed(1))+'G';
+    const col = (p.free/p.total)<=0.1?'var(--red)':(p.free/p.total)<=0.25?'var(--yellow)':'var(--green)';
+    const letter = (p.mount||'').replace(/[:\\\/]$/,'').replace(/^([A-Za-z]):.*/,'$1')||'?';
+    return `<div class="pcell">
+      <div class="pd">${letter}:</div>
+      <div class="pbar"><i style="width:${usedPct!=null?usedPct:0}%;background:${col}"></i></div>
+      <div class="pt">${t('total')} ${fmtG(totalGb)}</div>
+      <div class="pv">${t('used')}${usedPct!=null?usedPct+'%':'--'} · ${t('remain')}${fmtG(freeGb)}</div>
+    </div>`;
+  }).join('')+'</div>'):'';
+}
+
+function renderNet(){
+  try{
+    const n=S.network||{};
+    const p=n.ping||{};
+    const cells=[
+      {k:t('netDown'),raw:kv(n.down_speed,fmtSpeed)},
+      {k:t('netUp'),raw:kv(n.up_speed,fmtSpeed)},
+      {k:t('netLatency'),raw:p.latency_ms!=null?(p.latency_ms+' ms'):null,color:p.latency_ms!=null?(p.latency_ms<50?'var(--green)':p.latency_ms<150?'var(--yellow)':'var(--red)'):null},
+      {k:t('netLoss'),raw:p.loss!=null?(p.loss+'%'):null,color:p.loss!=null?(p.loss<=0?'var(--green)':p.loss<10?'var(--yellow)':'var(--red)'):null},
+    ];
+    let html='<div class="st-net">'+cells.map(x=>{
+      const q=stParts(x.raw);
+      const body=q
+        ? `<span class="st-num" style="${x.color?'color:'+x.color:''}">${stEsc(q.num)}${q.unit?'<small>'+stEsc(q.unit)+'</small>':''}</span>`
+        : '<span class="st-num na">N/A</span>';
+      return `<div class="cell"><div class="st-k">${x.k}</div>${body}</div>`;
+    }).join('')+'</div>';
+    const bits=[];
+    if(!isEmpty(n.down_total))bits.push(t('netDownTotal')+' '+fmtBytes(n.down_total));
+    if(!isEmpty(n.up_total))bits.push(t('netUpTotal')+' '+fmtBytes(n.up_total));
+    if(n.tcp_total!=null)bits.push('TCP '+n.tcp_total);
+    html+=`<div class="st-net-foot">${bits.join(' · ')||'N/A'}</div>`;
+    const el=$('net-rows');if(el)el.innerHTML=html;
+  }catch(e){
+    const el=$('net-rows');if(el)el.innerHTML='<div class="st-num na" style="text-align:center">N/A</div>';
+  }
+}
+
+function renderThermal(){
+  const el=$('thermal-rows');
+  try{
+    const th=S.thermal||{};
+    const fans=(th.fans||[]).filter(f=>f&&isNum(f.value)&&f.value>0);
+    const gpuT=(!isEmpty(th.gpu)&&isNum(th.gpu))?th.gpu:null;
+    const cpuT=(!isEmpty(th.cpu)&&isNum(th.cpu))?th.cpu:null;
+    const diskT=(!isEmpty(th.disk)&&isNum(th.disk))?th.disk:null;
+    const mbT=(!isEmpty(th.motherboard)&&isNum(th.motherboard))?th.motherboard:null;
+    const main=(gpuT!=null)?gpuT:((cpuT!=null)?cpuT:((diskT!=null)?diskT:mbT));
+    const fanRpm=fans.length?fans[0].value:null;
+    const lhmOk=g(S,'diagnostics.lhm_connected');
+    $('thermal-card').style.display='';
+    let html='';
+    if(main!=null){
+      html+=`<div class="st-hero"><span class="st-num" style="color:${tempColor(main)}">${main.toFixed(0)}<small>℃</small></span></div>`;
+    }else{
+      html+=`<div class="st-hero"><span class="st-num na">N/A</span></div>`;
+    }
+    // v2.5.7 六格固定：显卡温度|CPU温度 / GPU频率|CPU频率 / GPU功耗|CPU功耗；读不到显示 --
+    const sg=S.gpu||{}, sc=S.cpu||{};
+    const gpuClock=fmtHzParts(sg.core_clock);
+    const cpuClock=fmtHzParts(sc.freq_current);
+    const w=x=>isNum(x)?(x<10?x.toFixed(1):x.toFixed(0)):null;
+    const grid=[
+      {k:t('thermalGpu'),num:gpuT!=null?gpuT.toFixed(0):null,unit:'℃',c:gpuT!=null?tempColor(gpuT):null},
+      {k:t('thermalCpuTemp'),num:cpuT!=null?cpuT.toFixed(0):null,unit:'℃',c:cpuT!=null?tempColor(cpuT):null},
+      {k:t('thermalGpuFreq'),num:gpuClock?gpuClock.num:null,unit:gpuClock?gpuClock.unit:null,c:null},
+      {k:t('thermalCpuFreq'),num:cpuClock?cpuClock.num:null,unit:cpuClock?cpuClock.unit:null,c:null},
+      {k:t('thermalGpuPower'),num:w(sg.power),unit:'W',c:null},
+      {k:t('thermalCpuPower'),num:w(sc.package_power),unit:'W',c:null},
+    ];
+    html+='<div class="st-mini g2">'+grid.map(x=>{
+      const val=x.num!=null?(x.num+'<small>'+(x.unit||'')+'</small>'):'--';
+      return `<div class="cell"><div class="st-k">${x.k}</div><div class="v" style="${x.c?'color:'+x.c:''}">${val}</div></div>`;
+    }).join('')+'</div>';
+    if(main==null&&lhmOk===false){
+      html+=`<div class="st-foot" style="margin:4px 0 0">N/A · ${t('thermalNoLhmShort')}</div>`;
+    }
+    if(el)el.innerHTML=html;
+  }catch(e){
+    if(el)el.innerHTML='<div class="st-hero"><span class="st-num na">N/A</span></div>';
+  }
+  if(el&&!el.innerHTML.trim())el.innerHTML='<div class="st-num na" style="text-align:center">N/A</div>';
+}
+
+let _fpsTip=null,_fpsPickList=null,_fpsPickQuery='';
+const FPS_REASON={disabled:'fpsReasonDisabled',no_game:'fpsReasonNoGame',waiting_game:'fpsReasonWaitingGame',no_permission:'fpsReasonNoPermission',no_process:'fpsReasonNoProcess',presentmon_missing:'fpsReasonPresentmonMissing',no_presentmon:'fpsReasonPresentmonMissing',launcher:'fpsReasonLauncher',start_failed:'fpsReasonStartFailed',warming:'fpsReasonWarming',ok:'fpsReasonOk'};
+function showFpsTip(msg){
+  _fpsTip=msg?{text:msg,until:Date.now()+4000}:null;
+  const tip=$('fps-manual-tip');if(tip)tip.textContent=msg||'';
+}
+function renderFps(){
+  const el=$('fps-rows');
+  if(!el)return;   // v3.1.4：帧率卡片已移除，直接跳过渲染
+  if(_fpsTip&&Date.now()>_fpsTip.until)_fpsTip=null;
+  try{
+    const fp=S.fps||{};
+    const on=(fp.available===true);
+    const cur=on&&fp.current!=null?fp.current:null;
+    const avg=on&&fp.avg!=null?fp.avg:null;
+    const low1=on&&fp.low1!=null?fp.low1:null;
+    const ft=on&&fp.frametime!=null?fp.frametime:null;
+    const reason=fp.reason||null;
+    const status=fp.status||null;
+    const pid=fp.pid||0;
+    const locked=fp.process||fp.game||'';
+    const lockedTxt=locked?(locked+(pid?' · PID '+pid:'')):'—';
+    const reasonTxt=reason?t(FPS_REASON[reason]||'fpsNone'):t('fpsNone');
+    const STATUS_KEY={capturing:'fpsCapturing',warming:'fpsCapturing',waiting:'fpsWaiting'};
+    const statusTxt=(status&&STATUS_KEY[status])?t(STATUS_KEY[status]):'';
+    const capturing=(status==='capturing'||status==='warming'||reason==='warming'||reason==='ok');
+    $('fps-card').style.display='';
+    let html='';
+    if(cur!=null){
+      html+=`<div class="st-hero"><span class="st-num" style="color:${fpsColor(cur)}">${cur.toFixed(0)}<small>FPS</small></span></div>`;
+      html+=`<div class="st-foot">${stEsc(lockedTxt)}${statusTxt?' · '+statusTxt:''}</div>`;
+    }else{
+      html+=`<div class="st-hero"><span class="st-num na">N/A</span></div>`;
+      const foot=capturing?t('fpsCapturingLocked',{name:lockedTxt}):reasonTxt;
+      html+=`<div class="st-foot">${stEsc(foot)}${statusTxt&&!capturing&&!reason?' · '+statusTxt:''}</div>`;
+    }
+    const grid=[
+      {k:t('fpsAvg'),num:avg!=null?avg.toFixed(0):null,unit:'FPS',c:avg!=null?fpsColor(avg):null},
+      {k:t('fpsLow1'),num:low1!=null?low1.toFixed(0):null,unit:'FPS',c:low1!=null?fpsColor(low1):null},
+      {k:t('fpsFrameTime'),num:ft!=null?ft.toFixed(1):null,unit:'ms',c:null},
+    ];
+    html+='<div class="st-mini">'+grid.map(x=>{
+      const val=x.num!=null?(x.num+'<small>'+x.unit+'</small>'):'--';
+      return `<div class="cell"><div class="st-k">${x.k}</div><div class="v" style="${x.c?'color:'+x.c:''}">${val}</div></div>`;
+    }).join('')+'</div>';
+    // v2.5.8 状态行：reason + 真实锁定进程（含 PID）
+    const dbgReason=reason||(fp.available?'ok':'—');
+    html+=`<div class="fps-dbg">reason=${stEsc(dbgReason)} · proc=${stEsc(lockedTxt)}</div>`;
+    // v2.6.0：默认全局自动识别；手动点选只作兜底，手动态提供“恢复自动”
+    let mbar='<div class="fps-manual-bar"><button id="fps-pick-btn">'+t('fpsManual')+'</button>';
+    if(fp.mode==='manual')mbar+='<button id="fps-auto-btn">'+t('fpsBackAuto')+'</button>';
+    html+=mbar+'</div>';
+    html+=`<div class="fps-tip" id="fps-manual-tip">${stEsc(_fpsTip?_fpsTip.text:'')}</div>`;
+    if(el)el.innerHTML=html;
+    bindFpsManual();
+  }catch(e){
+    if(el)el.innerHTML='<div class="st-hero"><span class="st-num na">N/A</span></div>';
+  }
+  if(el&&!el.innerHTML.trim())el.innerHTML='<div class="st-num na" style="text-align:center">N/A</div>';
+}
+
+/* v2.5.8 进程点选：拉 /api/processes → 搜索点选 → POST {pid,name} → agent 用 --process_id 抓帧 */
+function bindFpsManual(){
+  const btn=$('fps-pick-btn');if(btn)btn.onclick=openFpsPicker;
+  const auto=$('fps-auto-btn');if(auto)auto.onclick=restoreAutoFps;
+}
+function restoreAutoFps(){
+  sessionStorage.removeItem('pc_fps_manual_session');
+  localStorage.removeItem('pc_fps_manual');
+  localStorage.removeItem('pc_fps_proc');
+  localStorage.removeItem('pc_fps_pid');
+  showFpsTip(t('fpsAutoRestored'));
+  postTarget(0,'',(ok,info)=>{
+    if(!ok){showFpsTip(t('fpsTargetFailed',{msg:info}));return;}
+    showFpsTip(t('fpsAutoRestored'));
+  });
+}
+function openFpsPicker(){
+  const ov=$('fps-pick-ov');if(ov)ov.classList.add('show');
+  const inp=$('fps-pick-search');
+  if(inp){
+    inp.value=_fpsPickQuery||'';
+    inp.oninput=()=>{_fpsPickQuery=inp.value;renderFpsPickList();};
+  }
+  loadFpsProcesses();
+}
+function closeFpsPicker(){const ov=$('fps-pick-ov');if(ov)ov.classList.remove('show');}
+function loadFpsProcesses(){
+  const b=base(),box=$('fps-pick-list');
+  if(!b){if(box)box.innerHTML='<div class="fps-pick-empty">'+t('pleaseSetIP')+'</div>';return;}
+  if(box)box.innerHTML='<div class="fps-pick-empty">'+t('fpsPickLoading')+'</div>';
+  fetch(b+'/api/processes?brief=1').then(r=>r.json()).then(d=>{
+    _fpsPickList=(d&&d.processes)||[];
+    renderFpsPickList();
+  }).catch(()=>{if(box)box.innerHTML='<div class="fps-pick-empty">'+t('procLoadFailed')+'</div>';});
+}
+function renderFpsPickList(){
+  const box=$('fps-pick-list');if(!box)return;
+  const q=(_fpsPickQuery||'').trim().toLowerCase();
+  let list=_fpsPickList||[];
+  if(q)list=list.filter(p=>String(p.name||'').toLowerCase().indexOf(q)>=0||String(p.pid||'').indexOf(q)>=0);
+  // v2.5.10：尊重后端"游戏优先"排序（占GPU > 有窗口 > 内存），前端不再按内存重排，
+  // 否则 2GB 的后台进程（如 ROB RUN.exe）会被顶到第一，用户点错锁错进程。
+  // 仅把纯系统进程再往后压一层，并截断避免长列表卡顿。
+  const sys=n=>/^(dwm|svchost|explorer|system|csrss|wininit|services|lsass|smss|fontdrvhost|conhost)\.exe$/i.test(n||'')?1:0;
+  list=list.slice().sort((a,b)=>sys(a.name)-sys(b.name)).slice(0,200);
+  if(!list.length){box.innerHTML='<div class="fps-pick-empty">'+t('fpsPickEmpty')+'</div>';return;}
+  box.innerHTML=list.map(p=>{
+    const pid=Number(p.pid)||0,name=String(p.name||'?');
+    const mem=p.mem?fmtBytes(p.mem):'';
+    const title=String(p.title||'').trim();
+    const badge=(p.gpu?t('fpsPickGpu')+' · ':'')+(p.win?t('fpsPickWindow'):'');
+    const nm=name.replace(/\\/g,'\\\\').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    const sub=[('PID '+pid),mem,badge].filter(Boolean).map(stEsc).join(' · ');
+    return `<div class="fps-pick-item" onclick="pickFpsTarget(${pid},&quot;${nm}&quot;)">
+      <div class="fp-n">${stEsc(name)}${title?'<span class="fp-title">'+stEsc(title)+'</span>':''}<small>${sub}</small></div>
+      <div class="fp-go">›</div></div>`;
+  }).join('');
+}
+function pickFpsTarget(pid,name){
+  closeFpsPicker();
+  pid=Number(pid)||0;name=String(name||'').trim();
+  if(!pid){showFpsTip(t('fpsTargetFailed',{msg:t('fpsReasonNoProcess')}));return;}
+  sessionStorage.setItem('pc_fps_manual_session','1');  // 仅本次会话有效，刷新后回自动
+  localStorage.setItem('pc_fps_manual','1');
+  localStorage.setItem('pc_fps_proc',name);
+  localStorage.setItem('pc_fps_pid',String(pid));
+  if(localStorage.getItem('pc_fps')!=='1'){
+    localStorage.setItem('pc_fps','1');
+    if($('set-fps'))$('set-fps').checked=true;
+    postConfig({fps_enabled:true});
+  }
+  showFpsTip(t('fpsLocked',{name}));
+  postTarget(pid,name,(ok,info)=>{
+    if(!ok){showFpsTip(t('fpsTargetFailed',{msg:info}));return;}
+    if($('set-fps'))$('set-fps').checked=true;
+    if(info&&info.fps){
+      localStorage.setItem('pc_fps_proc',info.fps.process||name);
+      localStorage.setItem('pc_fps_pid',String(info.fps.pid||pid));
+    }
+  });
+}
+function postTarget(pid,name,cb){
+  const b=base();
+  if(!b){if(cb)cb(false,t('pleaseSetIP'));return;}
+  fetch(b+'/api/fps_target',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({pid:Number(pid)||0,name:String(name||'')})}).then(r=>r.json()).then(d=>{
+    if(d&&d.ok){if(cb)cb(true,d);return;}
+    const r=d&&d.fps&&d.fps.reason;
+    if(cb)cb(false,r?t(FPS_REASON[r]||'fpsTargetFailed'):t('serverError'));
+  }).catch(e=>{if(cb)cb(false,String((e&&e.message)||e||t('serverError')));});
+}
+/* 连接建立后对齐：本地选中的 PID+名字 与 agent 保持同一份状态 */
+function syncFpsState(b){
+  // v3.1.4：帧率功能已永久移除，不再同步任何帧率开关/锁定状态。
+  return;
+
+  fetch(b+'/api/fps_target').then(r=>r.json()).then(d=>{
+    if(!d)return;
+    const local=localStorage.getItem('pc_fps');
+    const desired=(local===null)?!!d.enabled:(local==='1');
+    if(desired!==!!d.enabled)postConfig({fps_enabled:desired});
+    localStorage.setItem('pc_fps',desired?'1':'0');
+    if($('set-fps'))$('set-fps').checked=desired;
+    // v3.1.1：默认始终走全局自动识别（agent 用 CSV 动态认游戏，实测能抓到帧）。
+    // 手动 --process_id 锁定在部分游戏上抓不到帧，且旧 localStorage 锁会在每次
+    // 轮询时把服务端重新锁死（曾导致游戏开着却永远"等待游戏窗口"）。
+    // 只有用户本次会话里明确点选（带会话标记）才下手动锁；页面刷新后一律回自动。
+    const manual=sessionStorage.getItem('pc_fps_manual_session')==='1';
+    const lp=localStorage.getItem('pc_fps_proc');
+    const lpid=parseInt(localStorage.getItem('pc_fps_pid')||'0',10)||0;
+    if(manual&&lp&&lpid){
+      if(lp!==(d.process_name||'')||lpid!==(d.pid||0))postTarget(lpid,lp);
+    }else{
+      localStorage.removeItem('pc_fps_manual');
+      localStorage.removeItem('pc_fps_proc');
+      localStorage.removeItem('pc_fps_pid');
+      if(d.process_name||d.pid)postTarget(0,'');   // 清掉服务端旧手动目标，回全局自动
+    }
+  }).catch(()=>{});
+}
+
+function renderBatt(){
+  const el=$('batt-rows');
+  try{
+    const p=S.power||{};
+    $('batt-card').style.display='';
+    const has=(p.battery_present===true)||(p.battery_percent!=null);
+    if(!has){
+      if(el)el.innerHTML='<div class="st-hero"><span class="st-num na">N/A</span></div><div class="st-foot">'+t('battNone')+'</div>';
+    }else{
+      const pct=p.battery_percent;
+      const health=p.health;
+      const plugged=p.plugged;
+      const statusTxt=plugged===true?t('chargingTxt'):(plugged===false?t('dischargingTxt'):(isEmpty(p.status)?'—':p.status));
+      const hero=(pct!=null&&!isEmpty(pct))
+        ? `<div class="st-hero"><span class="st-num" style="color:${battColor(pct)}">${Number(pct).toFixed(0)}<small>%</small></span></div>`
+        : `<div class="st-hero"><span class="st-num na">N/A</span></div>`;
+      let html=hero+`<div class="st-foot">${stEsc(statusTxt)}</div>`;
+      const grid=[
+        {k:t('battHealth'),v:(health!=null&&!isEmpty(health))?(Number(health).toFixed(0)+'%'):'--'},
+        {k:t('battPower'),v:kv(p.charge_power,fmtW)||'--'},
+        {k:t('battTimeLeft'),v:kv(p.time_left_sec,fmtDur)||'--'},
+      ];
+      html+='<div class="st-mini">'+grid.map(x=>`<div class="cell"><div class="st-k">${x.k}</div><div class="v">${x.v}</div></div>`).join('')+'</div>';
+      if(el)el.innerHTML=html;
+    }
+  }catch(e){
+    if(el)el.innerHTML='<div class="st-hero"><span class="st-num na">N/A</span></div>';
+  }
+  if(el&&!el.innerHTML.trim())el.innerHTML='<div class="st-num na" style="text-align:center">N/A</div>';
+}
+// 状态页四卡辅助：数值/单位拆分（统一主数值字号）+ 文本转义
+function stParts(raw){
+  if(raw==null||raw==='')return null;
+  const s=String(raw).trim();
+  const m=s.match(/^(-?[\d,]+(?:\.\d+)?)\s*(.*)$/);
+  if(!m)return {num:s,unit:''};
+  let num=m[1];
+  if(num.length>5&&num.indexOf('.')>=0)num=Number(num).toFixed(1);
+  return {num:num,unit:(m[2]||'').trim()};
+}
+function stEsc(v){return String(v==null?'':v).replace(/[<>]/g,'');}
+
+function renderProcSummary(){
+  const s=S.system||{};
+  const rows=[
+    {k:t('procCount'),v:s.process_count!=null?t('unitCount',{n:s.process_count}):null},
+    {k:t('threadCount'),v:s.thread_count!=null?t('unitCount',{n:s.thread_count}):null},
+    {k:t('handleCount'),v:s.handle_count!=null?t('unitCount',{n:s.handle_count}):null},
+    {k:t('uptime'),v:kv(s.uptime,fmtDur)},
+  ];
+  $('proc-rows').innerHTML=rowsHTML(rows);
+}
+
+function renderAlerts(){
+  const a=S.alerts||[];
+  $('alerts').innerHTML=a.map(x=>`<div class="alert">⚠ ${x.message}</div>`).join('');
+  // 超限卡片高亮：按告警 category 给对应卡片加 warn 边框
+  const map={cpu:'cpu-card',gpu:'gpu-card',memory:'mem-card',disk:'disk-card',power:'batt-card',thermal:'thermal-card',network:'net-card'};
+  const warnCats={};
+  a.forEach(x=>{ if(x.category) warnCats[x.category]=1; });
+  for(const cat in map){
+    const el=$(map[cat]); if(!el)continue;
+    el.classList.toggle('warn',!!warnCats[cat]);
+  }
+  // 通知（若开启告警）
+  checkNotify(a);
+}
+
+/* ============ 系统通知（告警开关接通） ============ */
+const NOTIFIED={};       // 告警 category -> 最近一次通知时间，用于冷却
+const NOTIFY_COOLDOWN=60000;  // 同一类告警 60 秒内只弹一次
+async function checkNotify(alerts){
+  const on=localStorage.getItem('pc_alert')!=='0';
+  if(!on||!alerts||!alerts.length)return;
+  const now=Date.now();
+  for(const a of alerts){
+    const key=a.category||a.message||'alert';
+    if(now-(NOTIFIED[key]||0)<NOTIFY_COOLDOWN)continue;
+    NOTIFIED[key]=now;
+    try{ await pushNotify(t('alertNotifyTitle'), a.message); }catch(e){}
+    break; // 每次渲染只弹一条，避免轰炸
+  }
+}
+async function pushNotify(title, body){
+  // 优先 Capacitor 本地通知（真机 APP 环境）
+  try{
+    const C=window.Capacitor;
+    const LN=C&&C.Plugins&&C.Plugins.LocalNotifications;
+    if(LN&&LN.schedule){
+      let granted=LN.checkPermissions?await LN.checkPermissions():null;
+      if(granted&&granted.display!=='granted'){ granted=await LN.requestPermissions(); }
+      await LN.schedule({notifications:[{id:Date.now(),title:title,body:body,schedule:{at:new Date(Date.now()+100)}}]});
+      return;
+    }
+  }catch(e){}
+  // 降级：浏览器 Notification API（PWA/浏览器直接访问时）
+  try{
+    if('Notification' in window){
+      if(Notification.permission==='granted'){ new Notification(title,{body:body}); }
+      else if(Notification.permission!=='denied'){ Notification.requestPermission().then(p=>{ if(p==='granted') new Notification(title,{body:body}); }); }
+    }
+  }catch(e){}
+}
+
+/* ============ 详情页 ============ */
+const DETAILS={
+  cpu:{title:'CPU',metric:'cpu.total',unit:'%',color:v=>pctColor(v),
+    hero:(c)=>`<div class="big" style="color:${pctColor(c.total)}">${c.total==null?'—':c.total.toFixed(0)}<small>%</small></div><div class="nm">${t('cpuTotal')}</div>`,
+    rows:(c)=>[
+      {k:t('perCore'),html:coresHTML(c.per_core)},
+      {k:t('cpuFreq'),v:kv(c.freq_current,fmtHz)},
+      {k:t('baseFreq'),v:kv(c.freq_base,fmtHz)},
+      {k:t('cpuTemp'),v:kv(c.temp_package,fmtTemp),color:tempColor(c.temp_package)},
+      {k:t('cpuPackagePower'),v:kv(c.package_power,fmtW)},
+      {k:t('cpuUser'),v:kv(c.user,v=>v.toFixed(0),'%')},
+      {k:t('cpuSystem'),v:kv(c.system,v=>v.toFixed(0),'%')},
+      {k:t('processorQueue'),v:c.queue_length!=null?(c.queue_length+' '):null},
+      {k:t('interrupts'),v:c.interrupts_per_sec!=null?(Math.round(c.interrupts_per_sec)+' '):null},
+      {k:t('coreCount'),v:c.count_logical!=null?t('unitThreads',{n:c.count_logical}):null},
+    ]},
+  gpu:{title:t('gpuName'),metric:'gpu.util',unit:'%',color:v=>pctColor(v),
+    hero:(g)=>`<div class="big" style="color:${pctColor(g.util)}">${g.util==null?'—':g.util.toFixed(0)}<small>%</small></div><div class="nm">${g.name||t('usage')}</div>`,
+    rows:(g)=>[
+      {k:t('gpuVram'),v:g.vram_used!=null?fmtBytes(g.vram_used)+' / '+fmtBytes(g.vram_total):null},
+      {k:t('gpuTemp'),v:kv(g.temp,fmtTemp),color:tempColor(g.temp)},
+      {k:t('gpuPower'),v:g.power!=null?fmtW(g.power)+(g.power_limit!=null?' / '+fmtW(g.power_limit):''):null},
+      {k:t('gpuCoreClock'),v:kv(g.core_clock,fmtHz)},
+      {k:t('gpuMemClock'),v:kv(g.mem_clock,fmtHz)},
+      {k:t('fan'),v:kv(g.fan,v=>v.toFixed(0),'%')},
+      {k:t('perfState'),v:g.pstate||null},
+    ]},
+  mem:{title:t('memory'),metric:'memory.percent',unit:'%',color:v=>pctColor(v),
+    hero:(m)=>`<div class="big" style="color:${pctColor(m.percent)}">${m.percent==null?'—':m.percent.toFixed(0)}<small>%</small></div><div class="nm">${t('usage')}</div>`,
+    rows:(m)=>[
+      {k:t('memUsed'),v:kv(m.used,fmtBytes)},
+      {k:t('memAvailable'),v:kv(m.available,fmtBytes)},
+      {k:t('memTotal'),v:kv(m.total,fmtBytes)},
+      {k:t('memCommit'),v:m.commit_used!=null?fmtBytes(m.commit_used)+' / '+fmtBytes(m.commit_limit):null},
+      {k:t('pageSwap'),v:m.pages_per_sec!=null?(Math.round(m.pages_per_sec)+'/s'):null},
+      {k:t('memCached'),v:kv(m.cached,fmtBytes)},
+      {k:t('nonpagedPool'),v:kv(m.nonpaged_pool,fmtBytes)},
+      {k:t('memFreq'),v:kv(m.freq_mhz,v=>v.toFixed(0),'MHz')},
+    ]},
+  disk:{title:t('diskName'),metric:'disk.write_speed',unit:'',color:v=>'var(--accent)',
+    hero:(d)=>`<div class="big" style="color:${d.percent_free==null?'var(--txt3)':(d.percent_free<=10?'var(--red)':d.percent_free<=25?'var(--yellow)':'var(--green)')}">${d.percent_free==null?'—':d.percent_free.toFixed(0)}<small>${t('freeRemain')}</small></div><div class="nm">${d.smart_model||t('freeSpace')}</div>`,
+    rows:(d)=>{
+      const idle=(d.busy_percent==null)||(d.busy_percent<=0.05);
+      return [
+        {k:t('diskRead'),v:kv(d.read_speed,fmtSpeed)},
+        {k:t('diskWrite'),v:kv(d.write_speed,fmtSpeed)},
+        {k:t('diskReadLatency'),v:(!idle&&d.read_latency_ms!=null)?kv(d.read_latency_ms,v=>v.toFixed(1),' ms'):null},
+        {k:t('diskWriteLatency'),v:(!idle&&d.write_latency_ms!=null)?kv(d.write_latency_ms,v=>v.toFixed(1),' ms'):null},
+        {k:t('diskBusy'),v:kv(d.busy_percent,v=>v.toFixed(0),'%')},
+        {k:t('diskQueue'),v:d.queue_length!=null?(d.queue_length+' '):null},
+        {k:t('diskTemp'),v:kv(d.temp,fmtTemp),color:tempColor(d.temp)},
+        {k:t('diskLife'),v:d.wear!=null?(d.wear+'%'):(d.percent_used!=null?(100-d.percent_used)+'%':null)},
+        {k:t('diskPowerOn'),v:d.power_on_hours!=null?t('unitHours',{n:d.power_on_hours}):null},
+      ];
+    }},
+};
+function coresHTML(cores){
+  if(!cores||!cores.length)return null;
+  return `<div class="cores" style="grid-template-columns:repeat(${cores.length>16?8:4},1fr);margin-top:0">`+
+    cores.map((v,i)=>`<div class="core"><i style="height:${v}%;background:${pctColor(v)}"></i><span>${i}</span></div>`).join('')+'</div>';
+}
+let curDetail=null;
+function openDetail(k){
+  curDetail=k;const d=DETAILS[k];
+  $('detail-title').textContent=d.title;
+  $('detail-ov').classList.add('show');
+  renderDetail();
+  loadHistory(d.metric);
+}
+function renderDetail(){
+  if(!curDetail||!S)return;
+  const d=DETAILS[curDetail];
+  const data=(curDetail==='cpu')?S.cpu:(curDetail==='gpu')?S.gpu:(curDetail==='mem')?S.memory:S.disk;
+  const rows=d.rows(data).filter(r=>r&&(r.v!=null||r.html));
+  let html=`<div class="hero">${d.hero(data)}</div><svg class="spark" id="spark" viewBox="0 0 300 64" preserveAspectRatio="none"></svg>`;
+  html+='<div class="card" style="margin-top:14px"><div class="card-hd"><div class="tt">'+t('detailInfo')+'</div></div>';
+  html+='<div class="rows">'+rows.map(r=>{
+    if(r.html)return `<div class="kv" style="grid-column:1/-1"><div class="k">${r.k}</div>${r.html}</div>`;
+    return `<div class="kv"><div class="k">${r.k}</div><div class="v" style="${r.color?'color:'+r.color:''}">${r.v}</div></div>`;
+  }).join('')+'</div></div>';
+  $('detail-body').innerHTML=html;
+}
+function closeDetail(){curDetail=null;$('detail-ov').classList.remove('show');}
+function loadHistory(metric){
+  const b=base();if(!b)return;
+  fetch(b+'/api/history?metric='+metric+'&seconds=60').then(r=>r.json()).then(data=>{
+    if(curDetail==null||DETAILS[curDetail].metric!==metric)return;
+    drawSpark($('spark'),data);
+  }).catch(()=>{});
+}
+function drawSpark(svg,data){
+  if(!svg||!data||data.length<2){svg.style.display='none';return;}
+  svg.style.display='block';
+  const W=300,H=64,P=2;
+  const vals=data.map(d=>d.v);const min=Math.min(...vals),max=Math.max(...vals);
+  const span=(max-min)||1;
+  const pts=data.map((d,i)=>[P+i*(W-2*P)/(data.length-1),H-P-(d.v-min)/span*(H-2*P)]);
+  const line=pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  const area=line+' '+(W-P)+','+(H-P)+' '+P+','+(H-P);
+  const color=DETAILS[curDetail].color(data[data.length-1].v);
+  svg.innerHTML=`<polygon class="area" points="${area}" fill="${color}"/><polyline points="${line}" stroke="${color}"/>`;
+}
+
+/* ============ 进程页 ============ */
+function openProcs(){$('proc-ov').classList.add('show');buildProcSort();loadProcs();}
+function closeProcs(){$('proc-ov').classList.remove('show');}
+function buildProcSort(){
+  const mk=(k,label)=>`<button class="seg" style="padding:6px 11px;border-radius:9px;border:1px solid var(--line);background:${procSort===k?'var(--accent)':'var(--card)'};color:${procSort===k?'#fff':'var(--txt2)'};font-size:12px" onclick="setProcSort('${k}')">${label}</button>`;
+  $('proc-sort').innerHTML=mk('cpu',t('sortByCpu'))+mk('mem',t('sortByMem'))+mk('name',t('sortByName'));
+}
+function setProcSort(k){procSort=k;buildProcSort();renderProcs();}
+function loadProcs(){
+  const b=base();if(!b)return;
+  $('proc-body').innerHTML='<div class="empty"><div class="ei">⏳</div><p>'+t('loadingProcs')+'</p></div>';
+  fetch(b+'/api/processes').then(r=>r.json()).then(d=>{PROCS=d;renderProcs();}).catch(()=>{
+    $('proc-body').innerHTML='<div class="empty"><div class="ei">⚠️</div><p>'+t('procLoadFailed')+'</p></div>';
+  });
+}
+const PSTATE={not_responding:{color:'var(--red)',dot:'#f87171'},running:{color:'var(--txt)',dot:'var(--green)'},sleeping:{color:'var(--txt)',dot:'#38bdf8'},suspended:{color:'var(--txt)',dot:'var(--txt3)'}};
+const PSTATE_KEY={not_responding:'stateNotResponding',running:'stateRunning',sleeping:'stateSleeping',suspended:'stateSuspended'};
+function pstateName(k){return t(PSTATE_KEY[k]||'stateRunning');}
+function renderProcs(){
+  if(!PROCS){return;}
+  const list=PROCS.processes||[];
+  // 排序：无响应恒置顶，其余按 procSort（cpu/mem/name）
+  const order={not_responding:0,running:1,sleeping:2,suspended:3};
+  list.sort((a,b)=>{
+    if(order[a.status]!==order[b.status])return order[a.status]-order[b.status];
+    if(procSort==='cpu'){ return (b.cpu||0)-(a.cpu||0); }
+    if(procSort==='mem'){ return (b.mem||0)-(a.mem||0); }
+    return (a.name||'').localeCompare(b.name||'','zh');
+  });
+  const groups={not_responding:[],running:[],sleeping:[],suspended:[]};
+  list.forEach(p=>{(groups[p.status]||groups.running).push(p);});
+  let html=`<div class="proc-sum">
+    <div class="ps"><div class="n">${PROCS.total||0}</div><div class="l">${t('procCount')}</div></div>
+    <div class="ps"><div class="n">${PROCS.threads||0}</div><div class="l">${t('threadCount')}</div></div>
+    <div class="ps"><div class="n">${PROCS.handles!=null?PROCS.handles:'—'}</div><div class="l">${t('handleCount')}</div></div>
+    <div class="ps"><div class="n">${fmtDur(PROCS.uptime)||'—'}</div><div class="l">${t('uptime')}</div></div>
+  </div>`;
+  for(const key of ['not_responding','running','sleeping','suspended']){
+    const arr=groups[key];if(!arr.length)continue;
+    const st=PSTATE[key];
+    const open=procExpanded[key];
+    const MAX=60;
+    html+=`<div class="pgroup ${open?'open':''}">
+      <div class="pgroup-hd" onclick="toggleGroup('${key}')">
+        <div class="gd" style="background:${st.dot}"></div>
+        <div class="gt" style="color:${key==='not_responding'?'var(--red)':'var(--txt)'}">${pstateName(key)}</div>
+        <div class="gc">${arr.length}</div>
+        <div class="car">›</div>
+      </div>
+      <div class="pgroup-bd">`;
+    const show=arr.slice(0,MAX);
+    html+=show.map(p=>prowHTML(p,key)).join('');
+    if(arr.length>MAX)html+=`<button class="more" onclick="this.closest('.pgroup-bd').querySelectorAll('.prow').forEach(n=>n.style.display='');this.style.display='none'">${t('showAll',{n:arr.length})}</button>`;
+    html+=`</div></div>`;
+  }
+  $('proc-body').innerHTML=html;
+}
+function prowHTML(p,key){
+  const hung=key==='not_responding';
+  const cpu=p.cpu==null?'—':p.cpu.toFixed(0)+'%';
+  const mem=p.mem==null?'—':fmtBytes(p.mem);
+  const val=procSort==='cpu'?'CPU '+cpu:mem;
+  return `<div class="prow ${hung?'hung':''}" onclick='openSheet(${JSON.stringify(p).replace(/'/g,"&#39;")})'>
+    <div class="pi">${(p.name||'?').charAt(0).toUpperCase()}</div>
+    <div class="pn">${p.name||t('unknown')}<small>PID ${p.pid}${p.threads!=null?' · '+t('unitThreads',{n:p.threads}):''}</small></div>
+    <div class="pv">${val}</div>
+  </div>`;
+}
+function toggleGroup(k){procExpanded[k]=!procExpanded[k];renderProcs();}
+function openSheet(p){
+  $('s-title').textContent=p.name||t('unknownProc');
+  $('s-sub').textContent='PID '+p.pid;
+  $('s-rows').innerHTML=rowsHTML([
+    {k:t('procStatus'),v:pstateName(p.status),color:p.status==='not_responding'?'var(--red)':null},
+    {k:t('cpuUsage'),v:p.cpu==null?null:p.cpu.toFixed(1)+'%'},
+    {k:t('cpuPeak'),v:p.peak==null?null:p.peak.toFixed(1)+'%'},
+    {k:t('memUsageText'),v:kv(p.mem,fmtBytes)},
+    {k:t('threadNum'),v:p.threads!=null?t('unitCount',{n:p.threads}):null},
+  ]);
+  $('mask').classList.add('show');$('sheet').classList.add('show');
+  // 异步拉取进程路径 / 命令行
+  const b=base();if(b&&p.pid!=null){
+    fetch(b+'/api/process/'+p.pid).then(r=>r.json()).then(d=>{
+      if(!$('sheet').classList.contains('show'))return;
+      let extra=[];
+      if(d&&d.exe) extra.push({k:t('path'),v:d.exe});
+      if(d&&d.cmdline) extra.push({k:t('cmdline'),v:d.cmdline});
+      if(extra.length){
+        const div=document.createElement('div');
+        div.style.marginTop='12px';
+        div.innerHTML=`<div class="k" style="font-size:11px;color:var(--txt3);letter-spacing:.3px;margin-bottom:8px">${t('procDetail')}</div>`+
+          extra.map(x=>`<div style="margin-bottom:8px;word-break:break-all"><div class="k" style="font-size:11px;color:var(--txt3)">${x.k}</div><div style="font-size:12px;color:var(--txt2);font-family:monospace;line-height:1.5">${x.v}</div></div>`).join('');
+        $('s-rows').appendChild(div);
+      }
+    }).catch(()=>{});
+  }
+}
+function closeSheet(){$('mask').classList.remove('show');$('sheet').classList.remove('show');}
+
+/* ============ Tab 切换 ============ */
+document.querySelectorAll('.tabbar button').forEach(b=>{
+  b.onclick=()=>{
+    const t=b.dataset.tab;
+    if(t==='cockpit'){
+      // 驾驶舱：横屏全屏覆盖页，只在本页内横屏，不切换 #view 里的 4 个竖屏 tab
+      const cur=(document.querySelector('.tabbar button.on')||{}).dataset?.tab||'perf';
+      window.__pbPrevTab=(cur==='cockpit')?'perf':cur;   // 避免返回目标记成驾驶舱自身
+      document.querySelectorAll('.tabbar button').forEach(x=>x.classList.toggle('on',x===b));
+      if(typeof window.__pbOpen==='function')window.__pbOpen();
+      return;
+    }
+    // 退出驾驶舱（若开着）
+    if(typeof window.__pbClose==='function')window.__pbClose();
+    document.querySelectorAll('.tabbar button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    document.querySelectorAll('#view .page').forEach(p=>p.classList.remove('active'));
+    $('page-'+t).classList.add('active');
+    $('view').scrollTop=0;
+  };
+});
+// 驾驶舱返回键：回到此前 tab（默认性能页）
+(function(){
+  const back=document.getElementById('pb-back-btn');
+  if(!back)return;
+  back.addEventListener('click',function(){
+    const prev=(window.__pbPrevTab&&window.__pbPrevTab!=='cockpit')?window.__pbPrevTab:'perf';
+    const btn=document.querySelector('.tabbar button[data-tab="'+prev+'"]')||document.querySelector('.tabbar button[data-tab="perf"]');
+    if(btn)btn.click();
+  },true);
+})();
+
+/* ============ 设置 ============ */
+function saveConn(){
+  // 保存前清洗：只留纯 IP 和纯数字端口
+  const ip=cleanIP($('set-ip').value);
+  const port=cleanPort($('set-port').value);
+  $('set-ip').value=ip;
+  $('set-port').value=port;
+  localStorage.setItem('pc_ip',ip);
+  localStorage.setItem('pc_port',port);
+  const tip=$('save-tip');
+  tip.textContent=ip?t('savedConnecting',{addr:ip+':'+port}):t('savedNoIp');
+  tip.classList.add('show');
+  setTimeout(()=>tip.classList.remove('show'),3000);
+  connect();
+}
+// 启动时清洗旧配置里的脏数据（含 http:// 或 :端口）
+function cleanupDirtyConfig(){
+  const rawIp=localStorage.getItem('pc_ip')||'';
+  const rawPort=localStorage.getItem('pc_port')||'';
+  if(!rawIp && !rawPort) return false;
+  const ip=cleanIP(rawIp);
+  const port=cleanPort(rawPort);
+  const dirty = (ip!==rawIp) || (rawPort && port!==rawPort);
+  localStorage.setItem('pc_ip',ip);
+  localStorage.setItem('pc_port',port);
+  return dirty;
+}
+function initSettings(){
+  $('set-ip').value=localStorage.getItem('pc_ip')||'';
+  $('set-port').value=localStorage.getItem('pc_port')||'8888';
+  $('set-alert').checked=localStorage.getItem('pc_alert')!=='0';
+  if($('set-fps'))$('set-fps').checked=localStorage.getItem('pc_fps')==='1';
+  // 关于区域版本信息
+  if($('about-ver'))$('about-ver').textContent=APP_VERSION;
+  if($('about-date'))$('about-date').textContent=BUILD_DATE;
+  if($('about-change'))$('about-change').textContent=t('changelog');
+  // 语言
+  document.querySelectorAll('#lang-seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===langPref));
+  document.querySelectorAll('#lang-seg button').forEach(b=>b.onclick=()=>{
+    langPref=b.dataset.v;
+    localStorage.setItem('pc_lang',langPref);
+    document.querySelectorAll('#lang-seg button').forEach(x=>x.classList.toggle('on',x===b));
+    applyI18n();
+  });
+  // 主题
+  document.querySelectorAll('#theme-seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===theme));
+  document.querySelectorAll('#theme-seg button').forEach(b=>b.onclick=()=>{
+    theme=b.dataset.v;document.documentElement.dataset.theme=theme;
+    localStorage.setItem('pc_theme',theme);
+    document.querySelectorAll('#theme-seg button').forEach(x=>x.classList.toggle('on',x===b));
+  });
+  // 间隔
+  const saved=localStorage.getItem('pc_interval')||'1';
+  document.querySelectorAll('#interval-seg button').forEach(b=>{
+    b.classList.toggle('on',b.dataset.v===saved);
+    b.onclick=()=>{
+      localStorage.setItem('pc_interval',b.dataset.v);
+      document.querySelectorAll('#interval-seg button').forEach(x=>x.classList.toggle('on',x===b));
+      const bb=base();if(bb)postConfig({interval:parseFloat(b.dataset.v)});
+    };
+  });
+  $('set-alert').onchange=()=>{
+    localStorage.setItem('pc_alert',$('set-alert').checked?'1':'0');
+    const bb=base();if(bb)postConfig({alerts_enabled:$('set-alert').checked});
+  };
+  const fpsSw=$('set-fps');
+  if(fpsSw)fpsSw.onchange=()=>{
+    localStorage.setItem('pc_fps',fpsSw.checked?'1':'0');
+    const bb=base();if(bb)postConfig({fps_enabled:fpsSw.checked});
+  };
+}
+function postConfig(data){
+  const b=base();if(!b)return;
+  fetch(b+'/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).catch(()=>{});
+}
+function applyInterval(){
+  const v=parseFloat(localStorage.getItem('pc_interval')||'1');
+  const b=base();if(b)postConfig({interval:v});
+}
+
+/* ============ 启动 ============ */
+if(cleanupDirtyConfig()){
+  setTimeout(()=>{
+    const tip=$('save-tip');
+    if(tip){ tip.textContent=t('cleanedConfig'); tip.classList.add('show'); setTimeout(()=>tip.classList.remove('show'),4500); }
+  },400);
+}
+applyI18n();
+initSettings();
+connect();
+applyInterval();
+
+/* 设置页驾驶舱入口：跳转到底部第5 tab */
+(function(){
+  const btn=document.getElementById('pb-open-btn');
+  if(!btn)return;
+  btn.addEventListener('click',function(){
+    const bt=document.querySelector('.tabbar button[data-tab="cockpit"]');
+    if(bt)bt.click();
+  });
+})();
+/* ============================================================
+   v3.0.6 驾驶舱：横屏限定本覆盖层；数据取自 /api/status，
+   动作映射到电脑端编号 1-12；独立 IIFE，不污染全局，不动其他 tab。
+   ============================================================ */
+(function(){
+  const root=document.getElementById('page-cockpit');
+  if(!root)return;
+  const $=id=>root.querySelector('#'+id);
+  const isNum=v=>v!=null&&!isNaN(v)&&v!=='';
+  const baseFn=(typeof base==='function')?base:(()=>'');
+  let statusTimer=null, clockTimer=null, last=null;
+
+  /* ---- 时钟 ---- */
+  const WK=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const MO=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  function tick(){
+    const d=last&&last.time?new Date(last.time*1000):new Date();
+    const p=n=>String(n).padStart(2,'0');
+    $('clk').firstChild.textContent=p(d.getHours())+':'+p(d.getMinutes());
+    $('sec').textContent=p(d.getSeconds());
+    $('dt').textContent=WK[d.getDay()]+' '+d.getDate()+' '+MO[d.getMonth()];
+  }
+
+  /* ---- 迷你折线图（带面积填充） ---- */
+  const hist={gpu:[],net:[]};
+  const COLOR={gpuSvg:'var(--pb-gpu)',netSvg:'var(--pb-net)'};
+  function spark(id,arr){
+    if(!arr.length)return;
+    const mx=Math.max.apply(null,arr.concat([1]));
+    const pts=arr.map((v,i)=>((i/(arr.length-1))*100).toFixed(1)+','+(30-(v/mx)*26-2).toFixed(1)).join(' ');
+    const svg=$(id); if(!svg)return;
+    const poly=svg.querySelector('polyline'); if(!poly)return;
+    poly.setAttribute('points',pts);
+    let area=svg.querySelector('.area');
+    if(!area){area=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+      area.setAttribute('class','area');area.setAttribute('fill',COLOR[id]||'var(--pb-accent)');
+      area.setAttribute('opacity','.28');svg.insertBefore(area,poly);}
+    const arr2=pts.split(' '), lastx=arr2[arr2.length-1].split(',')[0];
+    area.setAttribute('points','0,30 '+pts+' '+lastx+',30 0,30');
+  }
+  function push(k,v){hist[k].push(isNum(v)?v:0);if(hist[k].length>24)hist[k].shift();}
+
+  /* ---- CPU 每核占用竖条 ---- */
+  function renderCores(arr){
+    const box=$('cpuCores'); if(!box)return;
+    if(box.childElementCount!==arr.length){box.innerHTML='';
+      arr.forEach(()=>{const c=document.createElement('div');c.className='cbar';c.innerHTML='<i></i>';box.appendChild(c);});}
+    arr.forEach((v,i)=>{const bar=box.children[i];if(bar)bar.firstChild.style.height=Math.max(4,Math.min(100,isNum(v)?v:0))+'%';});
+  }
+
+  /* ---- 方块键定义：顺序严格对应用户布局；name=电脑端动作名（字符串） ---- */
+  const KEYS=[
+    {ico:'🎵',txt:'上一曲',name:'prev',act:1,sub:'PREV',dot:0},
+    {ico:'⏯',txt:'播放/暂停',name:'play_pause',act:2,sub:'PLAY',dot:1},
+    {ico:'🎵',txt:'下一曲',name:'next',act:3,sub:'NEXT',dot:0},
+    {ico:'🔊',txt:'静音',name:'mute',act:4,sub:'MUTE',dot:1},
+    {ico:'💻',txt:'Terminal',name:'terminal',act:5,sub:'SHELL',dot:1},
+    {ico:'📝',txt:'VS Code',name:'vscode',act:6,sub:'EDITOR',dot:1},
+    {ico:'🌐',txt:'Browser',name:'browser',act:7,sub:'WEB',dot:1},
+    {ico:'📁',txt:'Files',name:'files',act:8,sub:'EXPLORER',dot:1},
+    {ico:'🖼',txt:'任务管理器',name:'taskmgr',act:9,sub:'TASKMGR',dot:0},
+    {ico:'✂',txt:'截图',name:'screenshot',act:10,sub:'SNIP',dot:0},
+    {ico:'🌙',txt:'息屏',name:'sleep',act:11,sub:'SLEEP',dot:0},
+    {ico:'🔒',txt:'锁屏',name:'lock',act:12,sub:'LOCK',dot:0},
+  ];
+  const deck=$('deck');
+  const keyEls={};   // 动作名 → DOM，供状态回显定位
+  if(deck){
+    KEYS.forEach(k=>{
+      const el=document.createElement('div');
+      el.className='key'+([4,11,12].indexOf(k.act)>=0?' danger':'');
+      el.dataset.name=k.name; el.dataset.sub=k.sub;
+      el.innerHTML=(k.dot?'<span class="kdot"></span>':'')
+        +'<div class="kico">'+k.ico+'</div><div class="ktxt">'+k.txt+'</div>'
+        +(k.sub?'<div class="ksub">'+k.sub+'</div>':'');
+      el.onclick=()=>sendAction(k.name,el,k);
+      deck.appendChild(el);
+      keyEls[k.name]=el;
+    });
+  }
+
+  /* ---- 动作下发：发字符串动作名，命令在电脑端真实执行；成功/失败都有反馈 ---- */
+  const ACT_BY_NUM={1:'prev',2:'play_pause',3:'next',4:'mute',5:'terminal',6:'vscode',
+    7:'browser',8:'files',9:'taskmgr',10:'screenshot',11:'sleep',12:'lock'};
+  function sendAction(name,el,k){
+    // data-act 数字按钮（在播卡的上一曲/播放/下一曲/音量）统一转成动作名
+    if(/^\d+$/.test(String(name)))name=ACT_BY_NUM[Number(name)]||name;
+    if(el){el.classList.add('press');setTimeout(()=>el.classList.remove('press'),180);}
+    const b=baseFn();
+    if(!b){failKey(el,k,'未连接电脑');return;}
+    fetch(b+'/api/action',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:name})})
+      .then(r=>r.ok?r.json():Promise.reject(new Error('HTTP '+r.status)))
+      .then(j=>{
+        if(j&&j.ok){
+          if(el){el.classList.add('on');setTimeout(()=>el.classList.remove('on'),420);}
+          const d=j.detail||'已执行';
+          // 截图/睡眠/锁屏给轻提示；媒体/启动类只按压反馈，不打扰
+          if(name==='screenshot')flash('已截图：'+(d.split(/[\\/]/).pop()||d),true);
+          else if(name==='sleep'||name==='lock')flash('电脑'+d,true);
+          else if(name==='mute')flash(d,true);
+        }else{
+          failKey(el,k,(j&&(j.reason||j.detail))||'执行失败');
+        }
+      })
+      .catch(e=>failKey(el,k,'未连接/失败'));
+  }
+  function failKey(el,k,reason){
+    if(el){
+      el.classList.add('fail');
+      const sub=el.querySelector('.ksub');
+      if(sub){
+        const old=el.dataset.sub||sub.textContent;
+        sub.textContent='不可用';sub.style.color='var(--pb-red)';
+        setTimeout(()=>{sub.textContent=old;sub.style.color='';},1600);
+      }
+      setTimeout(()=>el.classList.remove('fail'),900);
+    }
+    flash(reason||'执行失败',false);
+  }
+  function flash(msg,ok){
+    const t=document.createElement('div');t.textContent=msg;
+    t.style.cssText='position:fixed;top:3vh;left:50%;transform:translateX(-50%);'
+      +'background:'+(ok===false?'#ff5a6a':'#37d39b')+';color:#08120c;'
+      +'padding:1vh 3vw;border-radius:2vh;font-size:1.8vh;z-index:99;opacity:.95';
+    document.body.appendChild(t);setTimeout(()=>t.remove(),1400);
+  }
+  root.querySelectorAll('.np-ctrl button').forEach(btn=>{
+    btn.onclick=()=>sendAction(btn.dataset.act,btn);
+  });
+
+  /* ---- 数据刷新：真实 /api/status，取不到显示 -- ---- */
+  const g=(o,p)=>{let c=o;for(const s of p.split('.')){if(c==null)return null;c=c[s];}return c;};
+  function txt(id,v){const e=$(id);if(e)e.textContent=(v==null?'--':String(v));}
+  function html(id,v){const e=$(id);if(e)e.innerHTML=v;}
+  function width(id,p){const e=$(id);if(e)e.style.width=(isNum(p)?Math.max(0,Math.min(100,p)):0)+'%';}
+  function fmtB(n){if(!isNum(n))return null;const u=['B','KB','MB','GB','TB'];let i=0;while(n>=1024&&i<u.length-1){n/=1024;i++;}return (n<10&&i>0?n.toFixed(1):n.toFixed(0))+' '+u[i];}
+  function fmtHz(n){if(!isNum(n))return null;if(n>=1e9)return (n/1e9).toFixed(2)+' GHz';if(n>=1e6)return (n/1e6).toFixed(0)+' MHz';return null;}
+  function fmtSpeed(n){if(!isNum(n))return null;return fmtB(n)+'/s';}
+
+  /* ---- v3.0.6 天气：优先 /api/status（agent 的 wttr.in），取不到则前端 Open-Meteo 兜底 ---- */
+  const WX_ICO=[
+    [/clear|sunny|晴/i,'☀️'],[/partly|cloud|多云|阴/i,'⛅'],[/overcast/i,'☁️'],
+    [/rain|drizzle|雨/i,'🌧️'],[/snow|雪/i,'❄️'],[/thunder|storm|雷/i,'⛈️'],
+    [/mist|fog|雾|haze/i,'🌫️'],[/wind/i,'💨']
+  ];
+  function wxIcon(desc){
+    if(!desc)return '🌙';
+    for(let i=0;i<WX_ICO.length;i++)if(WX_ICO[i][0].test(desc))return WX_ICO[i][1];
+    return '🌙';
+  }
+  let wxFallbackDone=false, wxFallback=null;
+  async function wxFromOpenMeteo(){
+    if(wxFallbackDone)return wxFallback;
+    wxFallbackDone=true;
+    try{
+      // 用浏览器 IP 粗定位（ip-api.com 免 key），再取 Open-Meteo 当前天气
+      let lat=null,lon=null,city=null;
+      try{
+        const loc=await (await fetch('https://ip-api.com/json/?fields=status,lat,lon,city',{cache:'no-store'})).json();
+        if(loc&&loc.status==='success'){lat=loc.lat;lon=loc.lon;city=loc.city;}
+      }catch(e){}
+      if(lat==null||lon==null){ // 兜底坐标（北京），仍不报错
+        lat=39.90;lon=116.40;city='';
+      }
+      const url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,weather_code&timezone=auto';
+      const w=await (await fetch(url,{cache:'no-store'})).json();
+      const cur=w&&w.current||{};
+      const codes={0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Fog',48:'Fog'};
+      let desc=codes[cur.weather_code]||'Cloudy';
+      if(cur.weather_code>=51&&cur.weather_code<=67)desc='Rain';
+      if(cur.weather_code>=71&&cur.weather_code<=77)desc='Snow';
+      if(cur.weather_code>=80)desc='Rain';
+      if(cur.weather_code>=95)desc='Thunderstorm';
+      wxFallback={temp:isNum(cur.temperature_2m)?Math.round(cur.temperature_2m):null,desc:desc,city:city||''};
+    }catch(e){wxFallback=null;}
+    return wxFallback;
+  }
+  function renderWeather(w){
+    const box=root.querySelector('.weather');
+    if(!box)return;
+    if(!w||!isNum(w.temp)){box.style.display='none';return;}   // 取不到就隐藏，不留 --
+    box.style.display='';
+    txt('wtIco',wxIcon(w.desc));
+    txt('wt',Math.round(w.temp)+'°');
+    txt('wsub',(w.desc||'')+(w.city?' · '+w.city:''));
+  }
+
+  /* ---- v3.1.0 NOW PLAYING：真实歌名/艺人/封面/进度条/播控状态 ---- */
+  let lastCover='';
+  function mmss(sec){
+    if(!isNum(sec)||sec<0)return '--:--';
+    sec=Math.floor(sec);const m=Math.floor(sec/60),s=sec%60;
+    return m+':'+String(s).padStart(2,'0');
+  }
+  function renderPlaying(p){
+    const np=$('npCard'); if(np)np.style.display='';   // 始终显示卡片
+    const cover=$('npCover'), prog=$('npProg'), cur=$('npCur'), dur=$('npDur');
+    if(p&&(p.title||p.artist)){
+      txt('npTitle',p.title||p.artist||'—');
+      const st=String(p.status||'').toLowerCase();
+      const badge=st.indexOf('play')>=0?'▶ 播放中':(st.indexOf('pause')>=0?'❚❚ 已暂停':'');
+      const artist=p.artist||p.album||'—';
+      txt('npArtist',badge?artist+' · '+badge:artist);
+      if(np)np.classList.remove('none');
+      // 封面：仅当 data URL 变化时赋值，避免每 2 秒重绘
+      const cv=p.cover||'';
+      if(cv&&cv!==lastCover){if(cover){cover.src=cv;cover.classList.add('on');}lastCover=cv;}
+      else if(!cv&&cover){cover.removeAttribute('src');cover.classList.remove('on');lastCover='';}
+      // 进度条：position/duration 真实值，2 秒一跳用过渡平滑
+      // v3.1.2：多数播放器(网易云/QQ音乐)经 SMTC 只报歌名封面、不报时间轴，
+      // WinRT 读到 position/duration 恒为 0。此时显示流动条 + 状态文案，
+      // 不再显示误导性的 0:00 / 0:00。
+      const pos=isNum(p.position)?p.position:null, du=isNum(p.duration)?p.duration:null;
+      const hasTime=(du!=null&&du>0);
+      if(prog){prog.parentElement.classList.toggle('indet',!hasTime);
+        if(hasTime){prog.style.transition='width 1.9s linear';
+          prog.style.width=Math.max(0,Math.min(100,(pos||0)/du*100))+'%';
+        }else{prog.style.transition='none';prog.style.width='34%';}}
+      if(cur)cur.textContent=hasTime?mmss(pos||0):(st.indexOf('play')>=0?'♪ 播放中':'—');
+      if(dur)dur.textContent=hasTime?mmss(du):'—';
+      const pb=$('npPlay'); if(pb)pb.textContent=(st.indexOf('pause')>=0?'▶':'⏸');
+    }else{
+      txt('npTitle','暂无播放'); txt('npArtist','—');
+      if(np)np.classList.add('none');
+      if(cover){cover.removeAttribute('src');cover.classList.remove('on');}lastCover='';
+      if(prog){prog.parentElement.classList.remove('indet');prog.style.transition='none';prog.style.width='0%';}
+      if(cur)cur.textContent='--:--'; if(dur)dur.textContent='--:--';
+      const pb=$('npPlay'); if(pb)pb.textContent='⏸';
+    }
+  }
+
+  async function refresh(){
+    const b=baseFn(); let d=null;
+    if(b){try{d=await (await fetch(b+'/api/status',{cache:'no-store'})).json();}catch(e){}}
+    if(!d){ // 未连接：全部占位，不显示假的演示数据
+      return;
+    }
+    last=d; tick();
+    // 天气：agent 返回的温度优先，缺失时前端 Open-Meteo 兜底
+    let wx=d.weather;
+    if(!(wx&&isNum(wx.temp))){
+      const fb=await wxFromOpenMeteo();
+      if(fb&&isNum(fb.temp))wx=fb;
+    }
+    renderWeather(wx);
+    // CPU
+    const cpu=d.cpu||{};
+    const cpuU=cpu.total!=null?cpu.total:cpu.usage;
+    html('cpuV',Math.round(isNum(cpuU)?cpuU:0)+'<span>%</span>');
+    const cpuTemp=cpu.temp_package!=null?cpu.temp_package:(cpu.temp!=null?cpu.temp:cpu.temperature);
+    txt('cpuT',isNum(cpuTemp)?Math.round(cpuTemp)+'°C':'--');
+    txt('cpuFreq',fmtHz(cpu.freq_current!=null?cpu.freq_current:cpu.freq)||'--');
+    const cpuPwr=cpu.power_package!=null?cpu.power_package:cpu.power;
+    txt('cpuPwr',isNum(cpuPwr)?(cpuPwr<10?cpuPwr.toFixed(1):Math.round(cpuPwr))+' W':'--');
+    const pc=cpu.count_physical||cpu.cores, lc=cpu.count_logical||cpu.threads;
+    txt('cpuCore',(pc||'--')+'C/'+(lc||'--')+'T');
+    const procs=g(d,'system.process_count')!=null?g(d,'system.process_count'):(g(d,'proc_count')!=null?g(d,'proc_count'):null);
+    txt('cpuProc',procs!=null?procs:'--');
+    const cores=cpu.perCore||cpu.per_core||[];
+    renderCores(cores);
+    txt('cpuFootPct',(isNum(cpuU)?Math.round(cpuU):0)+'%');
+    width('cpuProg',cpuU);
+    // GPU
+    const gpu=d.gpu||{};
+    const gpuU=gpu.util!=null?gpu.util:(gpu.usage!=null?gpu.usage:gpu.utilization);
+    html('gpuV',Math.round(isNum(gpuU)?gpuU:0)+'<span>%</span>');
+    const gpuT=gpu.hot!=null?gpu.hot:(gpu.temp!=null?gpu.temp:gpu.temperature);
+    const gpuP=gpu.power;
+    txt('gpuT',(isNum(gpuT)?Math.round(gpuT)+'°C':'--')+' · '+(isNum(gpuP)?Math.round(gpuP)+' W':'--'));
+    const mu=gpu.memUsed!=null?gpu.memUsed:gpu.vram_used, mt=gpu.memTotal!=null?gpu.memTotal:gpu.vram_total;
+    txt('gpuMem',(isNum(mu)?(mu/1024/1024/1024).toFixed(1):'--')+' / '+(isNum(mt)?(mt/1024/1024/1024).toFixed(0):'--')+' GB');
+    txt('gpuFreq',fmtHz(gpu.freq!=null?gpu.freq:gpu.core_clock)||'--');
+    txt('gpuHot',isNum(gpuT)?Math.round(gpuT)+'°C':'--');
+    txt('gpuFan',isNum(gpu.fan)?Math.round(gpu.fan)+'%':'--');
+    push('gpu',gpuU);spark('gpuSvg',hist.gpu);
+    const gmp=(isNum(mu)&&isNum(mt)&&mt>0)?mu/mt*100:null;
+    txt('gpuMemPct',isNum(gmp)?Math.round(gmp)+'%':'--');width('gpuMemProg',gmp);
+    // RAM
+    const mem=d.mem||d.memory||{};
+    const used=mem.used, total=mem.total;
+    html('ramV',(isNum(used)?(used/1024/1024/1024).toFixed(1):'--')+'<span>GB</span>');
+    txt('ramT','/ '+(isNum(total)?(total/1024/1024/1024).toFixed(0):'--')+' GB');
+    const mp=mem.percent!=null?mem.percent:(isNum(used)&&isNum(total)&&total>0?used/total*100:null);
+    txt('ramPct',isNum(mp)?Math.round(mp)+'%':'--');
+    txt('ramFree',fmtB(mem.available)||'--');
+    const su=mem.swapUsed!=null?mem.swapUsed:mem.swap_used, st=mem.swapTotal!=null?mem.swapTotal:mem.swap_total;
+    const swapStr=(isNum(su)?(su/1024/1024/1024).toFixed(1):'--')+' / '+(isNum(st)?(st/1024/1024/1024).toFixed(0):'--')+' GB';
+    txt('ramSwap',swapStr);txt('ramSwapLbl',swapStr);
+    txt('ramSpd',fmtHz(mem.speed)||'--');
+    txt('ramFootPct',isNum(mp)?Math.round(mp)+'%':'--');width('ramP',mp);
+    width('ramSwapProg',(isNum(su)&&isNum(st)&&st>0)?su/st*100:null);
+    // NET
+    const net=d.net||d.network||{};
+    const down=net.down!=null?net.down:net.down_speed, up=net.up!=null?net.up:net.up_speed;
+    const ds=fmtSpeed(down);
+    html('netV',(ds?ds.split(' ')[0]:'--')+'<span>'+(ds?ds.split(' ').slice(1).join(' '):'K/s')+'</span>');
+    const ping=(net.ping&&typeof net.ping==='object')?net.ping.latency_ms:net.ping;
+    txt('netT','↑ '+(fmtSpeed(up)||'--')+' · '+(isNum(ping)?Math.round(ping)+' ms':'--'));
+    txt('netUp',fmtSpeed(up)||'--');
+    txt('netPing',isNum(ping)?Math.round(ping)+' ms':'--');
+    txt('netRx',fmtB(net.rxTotal!=null?net.rxTotal:net.down_total)||'--');
+    txt('netTx',fmtB(net.txTotal!=null?net.txTotal:net.up_total)||'--');
+    txt('netFootSpd',ds||'--');
+    push('net',down);spark('netSvg',hist.net);
+    // v3.1.0 正在播放：真实标题/艺人/封面/状态/进度（winsdk WinRT）
+    renderPlaying(d.playing);
+    // 控制台状态条
+    const a=d.audio||{};
+    const vol=isNum(a.volume)?(a.muted?0:a.volume):null;
+    html('stVol',(vol==null?'--':vol)+'<small>%</small>');width('stVolB',vol);
+    txt('stPwr',(d.power&&d.power.plan)||'--');
+    const bri=g(d,'display.brightness');
+    html('stBri',(isNum(bri)?bri:'--')+'<small>%</small>');width('stBriB',bri);
+    txt('stUp',typeof fmtDur==='function'?(fmtDur(d.uptime)||'--'):'--');
+
+    /* v3.0.6 方块键状态灯：静音键反映系统静音、播放键反映在播状态 */
+    try{
+      const muteEl=keyEls['mute'];
+      if(muteEl){
+        const muted=!!a.muted;
+        const dot=muteEl.querySelector('.kdot');
+        const sub=muteEl.querySelector('.ksub');
+        if(muted){muteEl.classList.add('on');
+          if(sub)sub.textContent='已静音';}
+        else{muteEl.classList.remove('on');
+          if(sub)sub.textContent=muteEl.dataset.sub||'MUTE';}
+        if(dot)dot.classList.toggle('on',muted);
+      }
+      const playEl=keyEls['play_pause'];
+      if(playEl){
+        const st=String((d.playing&&d.playing.status)||'').toLowerCase();
+        const playing=st.indexOf('play')>=0;
+        const dot=playEl.querySelector('.kdot');
+        const sub=playEl.querySelector('.ksub');
+        if(sub)sub.textContent=playing?'播放中':(d.playing?'已暂停':'PLAY');
+        if(dot)dot.classList.toggle('on',playing);
+      }
+    }catch(e){}
+  }
+
+  // v3.0.6：进入驾驶舱自动请求横屏（原生 Capacitor 插件 / Web CSS 旋转兜底），
+  // 退出立即恢复竖屏。横屏状态只作用于本覆盖层与主界面切换，不动其他 tab。
+  const isNative=!!(window.Capacitor&&typeof window.Capacitor.isNativePlatform==='function'&&window.Capacitor.isNativePlatform());
+  function getSO(){
+    try{
+      if(isNative&&window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.ScreenOrientation)
+        return window.Capacitor.Plugins.ScreenOrientation;
+    }catch(e){}
+    return null;
+  }
+  function getSB(){
+    try{
+      if(isNative&&window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.StatusBar)
+        return window.Capacitor.Plugins.StatusBar;
+    }catch(e){}
+    return null;
+  }
+  function hideStatusBar(){
+    // v3.1.2：进驾驶舱隐藏手机状态栏(时间/信号/电量)，实现真正全屏沉浸
+    const sb=getSB();
+    if(sb){
+      // 覆盖在 WebView 之上 + 隐藏，才能真正去掉顶部状态栏
+      if(typeof sb.setOverlaysWebView==='function')sb.setOverlaysWebView({overlay:true}).catch(function(){});
+      if(typeof sb.hide==='function')sb.hide().catch(function(){});
+    }
+    if(typeof document.documentElement.requestFullscreen==='function'){
+      try{document.documentElement.requestFullscreen().catch(function(){});}catch(e){}
+    }
+  }
+  function showStatusBar(){
+    // v3.1.2：退出驾驶舱恢复状态栏，回到正常竖屏主界面
+    const sb=getSB();
+    if(sb&&typeof sb.show==='function')sb.show().catch(function(){});
+    if(document.fullscreenElement&&typeof document.exitFullscreen==='function'){
+      try{document.exitFullscreen().catch(function(){});}catch(e){}
+    }
+  }
+  function lockLandscape(){
+    const so=getSO();
+    if(so&&typeof so.lock==='function'){
+      so.lock({orientation:'landscape'}).catch(function(){});   // 原生：真正旋转屏幕
+    }else{
+      root.classList.add('pb-web-landscape');                    // Web 预览：CSS 旋转兜底
+    }
+    hideStatusBar();
+  }
+  function unlockPortrait(){
+    const so=getSO();
+    if(so&&typeof so.unlock==='function'){
+      so.unlock().catch(function(){});
+      if(typeof so.lock==='function')so.lock({orientation:'portrait'}).catch(function(){});
+    }else{
+      root.classList.remove('pb-web-landscape');
+    }
+    showStatusBar();
+  }
+  function open(){
+    // 复位到仪表盘屏（每次进入从第一屏开始）
+    const stage=$('stage'); if(stage)stage.classList.remove('show-deck');
+    root.querySelectorAll('.dots i').forEach(function(x,i){x.classList.toggle('on',i===0);});
+    root.classList.add('show');document.body.classList.add('pb-open');
+    root.setAttribute('aria-hidden','false');
+    lockLandscape();
+    tick();refresh();
+    if(clockTimer)clearInterval(clockTimer);clockTimer=setInterval(tick,1000);
+    if(statusTimer)clearInterval(statusTimer);statusTimer=setInterval(refresh,2000);
+  }
+  function close(){
+    // 先停定时器、解除横屏、隐藏覆盖层，确保主界面无残留、回到竖屏
+    if(clockTimer){clearInterval(clockTimer);clockTimer=null;}
+    if(statusTimer){clearInterval(statusTimer);statusTimer=null;}
+    unlockPortrait();
+    root.classList.remove('show');
+    const stage=$('stage'); if(stage)stage.classList.remove('show-deck');
+    document.body.classList.remove('pb-open');
+    root.setAttribute('aria-hidden','true');
+  }
+  // 暴露给 tab 导航调用
+  window.__pbOpen=open; window.__pbClose=close;
+
+  $('pb-back-btn').onclick=close;
+  root.querySelectorAll('.dots i').forEach(dot=>{
+    dot.onclick=()=>{
+      root.querySelectorAll('.dots i').forEach(x=>x.classList.remove('on'));
+      dot.classList.add('on');
+      $('stage').classList.toggle('show-deck',dot.dataset.p==='1');
+    };
+  });
+})();
+</script>
+</body>
+</html>

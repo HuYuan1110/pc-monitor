@@ -1,0 +1,16 @@
+{
+  "port": 8888,
+  "interval": 0.5,
+  "ping_target": "auto",
+  "alerts_enabled": true,
+  "thresholds": {
+    "cpu_temp": 85.0,
+    "gpu_temp": 85.0,
+    "disk_temp": 55.0,
+    "cpu_percent": 90.0,
+    "gpu_percent": 90.0,
+    "mem_percent": 90.0,
+    "disk_free_percent": 10.0,
+    "battery_low": 15.0
+  }
+}

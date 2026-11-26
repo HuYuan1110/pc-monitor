@@ -1,0 +1,33 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ---- 运行时数据（含隐私，不提交）----
+*.db
+*.db-journal
+*.log
+config.local.json
+
+# ---- 调试/截图残留 ----
+_shot*.png
+_diag*.png
+_final.png
+_t.png
+*.bak
+*.tmp
+
+# ---- 构建产物 ----
+dist/
+build/dist/
+*.spec
+
+# ---- 编辑器/系统 ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

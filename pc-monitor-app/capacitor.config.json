@@ -1,0 +1,12 @@
+{
+  "appId": "com.pcmonitor.app",
+  "appName": "电脑监测",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
