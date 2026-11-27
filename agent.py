@@ -87,7 +87,7 @@ DB_PATH = os.path.join(BASE_DIR, "monitor.db")
 CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
 # v3.1.0：与 APP 的 UI build / 设置页版本号保持一致
-APP_VERSION = "3.1.7"
+APP_VERSION = "3.1.14"
 
 
 def load_saved_config():
@@ -158,6 +158,11 @@ SNAPSHOT_LOCK = threading.Lock()
 
 SSE_CLIENTS = []          # 元素为 queue.Queue
 SSE_LOCK = threading.Lock()
+
+# v3.1.8-fix：驾驶舱慢字段（音量/亮度/电源计划/在播/天气/运行时长）统一由后台线程
+# 低频采集进这个缓存；SSE 与 /api/status 都读它，保证两条数据路径完全一致、不闪烁。
+_EXT_FIELDS = {}
+_EXT_LOCK = threading.Lock()
 
 PING_RESULT = {"latency_ms": None, "loss": None, "target": None, "ok": False}
 PING_LOCK = threading.Lock()
@@ -2796,6 +2801,76 @@ def _audio_state():
     return _cached("audio", 1.5, produce)
 
 
+def _set_volume(value):
+    """设置默认输出设备音量 0-100。返回 (ok, detail)。纯 ctypes COM。"""
+    if os.name != "nt":
+        return False, "仅支持 Windows"
+    try:
+        value = max(0, min(100, int(round(float(value)))))
+    except Exception:
+        return False, "音量值无效"
+    import ctypes
+    from ctypes import wintypes
+
+    class _Guid(ctypes.Structure):
+        _fields_ = (("Data1", wintypes.DWORD), ("Data2", wintypes.WORD),
+                    ("Data3", wintypes.WORD), ("Data4", ctypes.c_ubyte * 8))
+
+        def __init__(self, text):
+            h = text.strip("{}").replace("-", "")
+            super(_Guid, self).__init__(
+                int(h[:8], 16), int(h[8:12], 16), int(h[12:16], 16),
+                (ctypes.c_ubyte * 8)(*[int(h[i:i + 2], 16) for i in range(16, 32, 2)]))
+
+    ole = ctypes.windll.ole32
+    ole.CoInitialize(None)
+    enum = dev = endpoint = None
+    try:
+        cls = _Guid("{BCDE0395-E52F-467C-8E3D-C4579291692E}")
+        iid_enum = _Guid("{A95664D2-9614-4F35-A746-DE8DB63617E6}")
+        iid_endpoint = _Guid("{5CDF2C82-841E-4546-9722-0CF74078229A}")
+        enum = ctypes.c_void_p()
+        if ole.CoCreateInstance(ctypes.byref(cls), None, 1,
+                                ctypes.byref(iid_enum), ctypes.byref(enum)):
+            return False, "创建音频枚举器失败"
+        vt = lambda p: ctypes.cast(p, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+        fn = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_int,
+                                ctypes.c_int, ctypes.POINTER(ctypes.c_void_p))(vt(enum)[4])
+        dev = ctypes.c_void_p()
+        if fn(enum, 0, 1, ctypes.byref(dev)):
+            return False, "未找到默认输出设备"
+        fn = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(_Guid),
+                                ctypes.c_int, ctypes.c_void_p,
+                                ctypes.POINTER(ctypes.c_void_p))(vt(dev)[3])
+        endpoint = ctypes.c_void_p()
+        if fn(dev, ctypes.byref(iid_endpoint), 1, None, ctypes.byref(endpoint)):
+            return False, "激活音量控制失败"
+        # IAudioEndpointVolume::SetMasterVolumeLevelScalar(scalar, context) = vt[7]
+        fn_set = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p,
+                                    ctypes.c_float, ctypes.c_void_p)(vt(endpoint)[7])
+        hr = fn_set(endpoint, ctypes.c_float(value / 100.0), None)
+        if hr != 0:
+            return False, f"设置音量失败 hr=0x{hr & 0xffffffff:08x}"
+        with _COCKPIT_LOCK:
+            _COCKPIT_CACHE["audio"] = (time.time() - 2.0, None)  # 令缓存过期，下一帧读新值
+        return True, value
+    except Exception as e:
+        return False, str(e)
+    finally:
+        for ptr in (endpoint, dev, enum):
+            if ptr is not None and ptr.value:
+                try:
+                    rel = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(
+                        vt(ptr)[2])
+                    rel(ptr)
+                except Exception:
+                    pass
+        try:
+            ole.CoUninitialize()
+        except Exception:
+            pass
+
+
 def _brightness():
     """笔记本屏幕亮度百分比；台式机/无权限返回 None。"""
     def produce():
@@ -2816,6 +2891,33 @@ def _brightness():
     return _cached("brightness", 10.0, produce)
 
 
+def _set_brightness(value):
+    """设置笔记本屏幕亮度 0-100（WMI WmiSetBrightness）。返回 (ok, detail)。"""
+    if not HAS_WMI:
+        return False, "WMI 不可用"
+    try:
+        value = max(0, min(100, int(round(float(value)))))
+    except Exception:
+        return False, "亮度值无效"
+    try:
+        import pythoncom
+        pythoncom.CoInitialize()
+        try:
+            w = _wmi_mod.WMI(namespace="root/wmi")
+            method = w.WmiMonitorBrightnessMethods()[0]
+            method.WmiSetBrightness(value, 0)   # (brightness, timeout)
+        finally:
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
+        with _COCKPIT_LOCK:
+            _COCKPIT_CACHE["brightness"] = (time.time() - 11.0, None)  # 令缓存过期
+        return True, value
+    except Exception as e:
+        return False, str(e)
+
+
 def _power_plan():
     """当前电源计划名称，例如「平衡」。"""
     def produce():
@@ -2824,6 +2926,46 @@ def _power_plan():
         return m.group(1).strip() if m else None
 
     return _cached("power_plan", 30.0, produce)
+
+
+def _set_power_plan(value):
+    """切换电源计划。value 可以是计划名关键字（平衡/高性能/节能）或 GUID。返回 (ok, detail)。"""
+    if os.name != "nt":
+        return False, "仅支持 Windows"
+    try:
+        val = str(value or "").strip()
+        if not val:
+            return False, "未指定电源计划"
+        # Windows 内置三套电源计划的 GUID 是固定的，直接用别名映射最稳（不依赖系统语言）
+        alias = {
+            "平衡": "381b4222-f694-41f0-9685-ff5bb260df2e",
+            "balanced": "381b4222-f694-41f0-9685-ff5bb260df2e",
+            "高性能": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+            "high performance": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+            "最高性能": "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c",
+            "节能": "a1841308-3541-4fab-bc81-f71556f20b4a",
+            "power saver": "a1841308-3541-4fab-bc81-f71556f20b4a",
+            "节省": "a1841308-3541-4fab-bc81-f71556f20b4a",
+        }
+        guid = alias.get(val.lower()) or alias.get(val)
+        if not guid and re.fullmatch(r"[0-9a-fA-F-]{36}", val):
+            guid = val.lower()
+        if not guid:
+            # 兜底：从 powercfg /list 按名称匹配自定义计划
+            out, _ = _run_cmd(["powercfg", "/list"], timeout=5)
+            for line in (out or "").splitlines():
+                m = re.search(r"([0-9a-fA-F-]{36})", line)
+                if m and val.lower() in line.lower():
+                    guid = m.group(1)
+                    break
+        if not guid:
+            return False, f"未找到电源计划：{val}"
+        out, err = _run_cmd(["powercfg", "/setactive", guid], timeout=5)
+        with _COCKPIT_LOCK:
+            _COCKPIT_CACHE["power_plan"] = (time.time() - 31.0, None)  # 令缓存过期
+        return True, val
+    except Exception as e:
+        return False, str(e)
 
 
 _PLAY_PS = (
@@ -2982,6 +3124,11 @@ _PLAY_COVER_CACHE = {"key": "", "cover": None}
 # v3.1.6：歌名+艺人联网查时长（国产播放器不上报时间轴的兜底）
 # 缓存：key=(title,artist) -> 时长秒数（None=查不到，避免反复查）
 _PLAY_DURATION_CACHE = {}
+# v3.1.11：时长查询异步化——切歌不再同步等网易云接口（原来 timeout 6s 直接卡住新歌显示）。
+# produce 只把新歌 key 丢进队列立即返回；duration_worker_loop 后台慢慢查，查到写缓存，
+# 下一帧 _playing() 自然读到，进度条随后出现。这一步只影响音乐卡片，不动其他采集。
+import queue as _queue
+_DURATION_Q = _queue.Queue(maxsize=32)
 # 进度估算：记录"当前歌"首次进入播放的时刻与累计播放秒数（处理暂停）
 _PLAY_PROGRESS = {"key": "", "status": "", "start_ts": 0.0, "acc": 0.0}
 
@@ -3030,6 +3177,36 @@ def _lookup_duration(title, artist):
     return result
 
 
+def duration_worker_loop():
+    """v3.1.11：后台查歌时长，避免切歌时同步联网阻塞音乐卡片显示。"""
+    while True:
+        try:
+            key = _DURATION_Q.get(timeout=1.0)
+        except Exception:
+            continue
+        try:
+            if isinstance(key, tuple) and len(key) == 2 and key not in _PLAY_DURATION_CACHE:
+                _lookup_duration(key[0], key[1])
+        except Exception:
+            pass
+        finally:
+            try:
+                _DURATION_Q.task_done()
+            except Exception:
+                pass
+
+
+def _queue_duration(title, artist):
+    """新歌需要查时长时调用：非阻塞投递。查不到/队列满都无声失败，不影响切歌。"""
+    key = (str(title or "").strip().lower(), str(artist or "").strip().lower())
+    if not key[0] or key in _PLAY_DURATION_CACHE:
+        return
+    try:
+        _DURATION_Q.put_nowait(key)
+    except Exception:
+        pass
+
+
 def _estimate_progress(result):
     """用联网查到的时长 + 检测到播放的时刻，估算进度 position。
     注意：播放器不上报真实位置，这是尽力而为的估算；暂停时冻结，切歌重置。"""
@@ -3071,19 +3248,15 @@ def _playing():
             else:
                 _PLAY_COVER_CACHE["key"] = key
                 _PLAY_COVER_CACHE["cover"] = result.get("cover")
-            # v3.1.6：播放器不上报时间轴时，用歌名+艺人联网查时长并估算进度
-            pos = result.get("position")
-            du = result.get("duration")
-            if not du or du <= 0:
-                found = _lookup_duration(result.get("title"), result.get("artist"))
-                if found and found > 0:
-                    result["duration"] = found
-                    result = _estimate_progress(result)
+            # v3.1.14：不再在后端查时长/算进度——播放器大多不上报时间轴，
+            # 联网查时长既慢又不可靠，还拖慢切歌。改由前端自己从播放开始计时显示。
+            # 这里只原样返回 WinRT 读到的（有 position/duration 就带，没有就 0）。
             return result
         return _playing_ps_fallback()
 
-    # 2 秒刷新：进度条 position/duration 实时走动
-    return _cached("playing", 2.0, produce)
+    # v3.1.14：只缓存 WinRT 原始结果，不做任何联网/进度计算，切歌零额外开销。
+    result = _cached("playing", 0.8, produce)
+    return result
 
 
 def _weather():
@@ -3149,20 +3322,26 @@ def extended_status():
         "rxTotal": net.get("down_total"),
         "txTotal": net.get("up_total"),
     })
-    return {
+    # v3.1.8-fix：慢字段从后台缓存读（与 SSE 同源），不再现场同步采集。
+    with _EXT_LOCK:
+        ext = dict(_EXT_FIELDS)
+    result = {
         **snap,
         "version": APP_VERSION,
         "cpu": cpu,
         "gpu": gpu,
         "mem": mem,
         "net": net,
-        "audio": _audio_state(),
-        "display": {"brightness": _brightness()},
-        "power": {"plan": _power_plan()},
         "uptime": (snap.get("system") or {}).get("uptime"),
-        "playing": _playing(),
-        "weather": _weather(),
     }
+    # v3.1.9-fix：power 合并而非覆盖，保留电池字段（见 sampler_loop 同名修复）
+    ext_power = ext.pop("power", None)
+    result.update(ext)
+    if isinstance(ext_power, dict):
+        pw = dict(result.get("power") or {})
+        pw.update(ext_power)
+        result["power"] = pw
+    return result
 
 
 def _media_key(vk):
@@ -3538,7 +3717,15 @@ class Handler(BaseHTTPRequestHandler):
             # v3.0.6 驾驶舱：action 支持字符串名(prev/play_pause/.../lock)与数字 1-12，
             # 在电脑端真实执行媒体/启动/截图/睡眠/锁屏；失败返回 {ok:false,reason}。
             act = data.get("action", data.get("code"))
-            ok, detail = run_action(act)
+            # v3.1.8-fix：状态条交互——音量/亮度/电源计划设置
+            if act in ("set_volume", "volume_set"):
+                ok, detail = _set_volume(data.get("value"))
+            elif act in ("set_brightness", "brightness_set"):
+                ok, detail = _set_brightness(data.get("value"))
+            elif act in ("set_power_plan", "power_plan_set"):
+                ok, detail = _set_power_plan(data.get("value"))
+            else:
+                ok, detail = run_action(act)
             resp = {"ok": bool(ok), "action": act, "detail": detail}
             if not ok:
                 resp["reason"] = detail
@@ -3794,6 +3981,48 @@ def heavy_loop(sampler):
         time.sleep(20.0)
 
 
+def cockpit_ext_loop():
+    """v3.1.8-fix：驾驶舱慢字段后台采集线程。
+
+    每 0.5 秒把音量/亮度/电源计划/在播/天气采集进 _EXT_FIELDS。各函数本身已带
+    缓存（音量1.5s/亮度10s/电源30s/在播1s/天气30min），缓存命中时只是查字典，
+    真正的重采集（WinRT 子进程 / powercfg / 天气联网）仍按各自 TTL 低频执行。
+    这样 SSE 与 /api/status 读同一份稳定数据，彻底消除字段一空一有的闪烁。
+    """
+    while True:
+        t0 = time.time()
+        # v3.1.14-fix：每个字段单独 try + 单独写缓存，不再一次性整体重建。
+        # 原因：天气联网 ~1.5s，原来和 playing 串行，切歌要等天气走完才推出去（实测 4-6s）。
+        # 现在天气卡住只影响天气自己，playing 由独立线程高频更新，切歌不再被拖。
+        for key, fn in (
+            ("audio", _audio_state),
+            ("display", lambda: {"brightness": _brightness()}),
+            ("power", lambda: {"plan": _power_plan()}),
+            ("weather", _weather),
+        ):
+            try:
+                value = fn()
+                with _EXT_LOCK:
+                    _EXT_FIELDS[key] = value
+            except Exception:
+                pass
+        time.sleep(max(0.2, 1.0 - (time.time() - t0)))
+
+
+def playing_loop():
+    """v3.1.14：在播信息独立高频线程——与天气/WMI 完全解耦，切歌即时刷新。"""
+    while True:
+        t0 = time.time()
+        try:
+            value = _playing()
+            with _EXT_LOCK:
+                _EXT_FIELDS["playing"] = value
+        except Exception:
+            pass
+        # 切歌检测：0.5 秒一轮（WinRT 子进程 ~0.85s 自带节流，不会过载）
+        time.sleep(max(0.15, 0.5 - (time.time() - t0)))
+
+
 def broadcast(snap):
     msg = ("data: " + json.dumps(snap, ensure_ascii=False) + "\n\n").encode("utf-8")
     with SSE_LOCK:
@@ -3816,6 +4045,24 @@ def sampler_loop(sampler):
             with SNAPSHOT_LOCK:
                 SNAPSHOT.clear()
                 SNAPSHOT.update(snap)
+            # v3.1.8-fix：把后台线程维护的驾驶舱慢字段并入 SSE 帧（纯字典合并，零阻塞），
+            # 与 /api/status 读同一份缓存，消除「一帧有一帧空」的闪烁。
+            # 慢采集全在 cockpit_ext_loop 后台线程，绝不拖累采样主循环。
+            with _EXT_LOCK:
+                ext = dict(_EXT_FIELDS)
+            # v3.1.9-fix：power 合并而非整体覆盖——基础快照的 power 含电池信息
+            # (battery_percent/health/plugged...)，_EXT_FIELDS 的 power 只有 plan，
+            # 直接 update 会把电池字段抹掉，导致状态页电池 N/A。
+            ext_power = ext.pop("power", None)
+            snap.update(ext)
+            if isinstance(ext_power, dict):
+                pw = dict(snap.get("power") or {})
+                pw.update(ext_power)
+                snap["power"] = pw
+            # v3.1.8-fix：uptime 原本只在 system.uptime 嵌套层，前端读顶层 d.uptime，
+            # 导致 SSE 帧显示 '--'、5秒轮询帧才有值而闪烁。这里补一份到顶层。
+            if snap.get("uptime") is None:
+                snap["uptime"] = (snap.get("system") or {}).get("uptime")
             broadcast(snap)
             store_snapshot(snap)
         except Exception:
@@ -3922,6 +4169,12 @@ def main():
     # 主采样循环只做毫秒级快采集，interval 参数才真正生效。
     threading.Thread(target=heavy_loop, args=(sampler,), daemon=True).start()
     threading.Thread(target=slow_loop, args=(sampler,), daemon=True).start()
+    # v3.1.8-fix：驾驶舱慢字段后台采集，SSE 与 /api/status 共享，消除闪烁
+    threading.Thread(target=cockpit_ext_loop, daemon=True).start()
+    # v3.1.14：在播独立高频线程——与天气联网解耦，切歌即时刷新
+    threading.Thread(target=playing_loop, daemon=True).start()
+    # v3.1.11：音乐切歌时长后台查询线程（切歌不再同步等网易云接口）
+    threading.Thread(target=duration_worker_loop, daemon=True).start()
     threading.Thread(target=store_loop, daemon=True).start()
     threading.Thread(target=sampler_loop, args=(sampler,), daemon=True).start()
     threading.Thread(target=ping_loop, daemon=True).start()

@@ -3,6 +3,9 @@
   "interval": 0.5,
   "ping_target": "auto",
   "alerts_enabled": true,
+  "fps_enabled": false,
+  "fps_process_name": "",
+  "fps_pid": 0,
   "thresholds": {
     "cpu_temp": 85.0,
     "gpu_temp": 85.0,
